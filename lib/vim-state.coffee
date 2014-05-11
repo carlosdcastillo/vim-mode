@@ -727,6 +727,8 @@ str2ab = (str) ->
     i++
   bufView
 
+HighlightedAreaView = require './motions/highlighted-area-view'
+
 module.exports =
 class VimState
   editor: null
@@ -975,6 +977,9 @@ class VimState
     )
     msg2 = encode_pub(message)
     socket2.write(msg2)
+
+    @area = new HighlightedAreaView(@editorView)
+    @area.attach()
 
   # Private: Creates a handle to block insertion while in command mode.
   #

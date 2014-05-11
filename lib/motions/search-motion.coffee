@@ -1,9 +1,9 @@
 _ = require 'underscore-plus'
 {MotionWithInput} = require './general-motions'
 SearchViewModel = require '../view-models/search-view-model'
-{$$, Point, Range} = require 'atom'
 {Input} = require '../view-models/view-model'
 {$$, Point, Range} = require 'atom'
+MarkerView = require './marker-view'
 
 class SearchBase extends MotionWithInput
   @currentSearch: null
@@ -24,20 +24,24 @@ class SearchBase extends MotionWithInput
     @initiallyReversed = @reverse = true
     @
 
-  execute: (count=1) ->
+  markAll: ->
     @scan()
+    @vimState.area.removeMarkers()
+    for pos in @matches
+        marker = new MarkerView(pos.range,@editorView,this)
+        @vimState.area.appendMarker(marker)
+
+  execute: (count=1) ->
+    @markAll()
+
     @match count, (pos) =>
-        q = pos.start.toArray()
-        @editor.setCursorBufferPosition(new Point(q[0],q[1]+pos.matchText.length))
-        for i in [0..pos.matchText.length-1]
-          @editor.selectLeft()
+        @editor.setCursorBufferPosition(pos.range.start)
 
   select: (count=1) ->
     @scan()
     selectionStart = @getSelectionStart()
     @match count, (pos) =>
-      reversed = selectionStart.compare(pos.range.start) > 0
-      @editor.setSelectedBufferRange([selectionStart, pos.range.start], {reversed})
+      @editor.setSelectedBufferRange([cur, pos.range.start])
     [true]
 
   getSelectionStart: ->
@@ -64,27 +68,16 @@ class SearchBase extends MotionWithInput
     matchPoints = []
     iterator = (item) =>
       matchPointItem =
-        start: item.range.start
-        matchText: item.matchText
+        range: item.range
       matchPoints.push(matchPointItem)
 
     @editor.scan(regexp, iterator)
 
-    previous2 = _.filter matchPoints, (point) =>
-        point.start.compare(cur) <= 0
-    if @reverse
-      if previous2.length>0
-        if previous2[previous2.length-1].start.compare(cur)<0
-          previous = previous2[..]
-        else
-          if previous2.length > 1
-            previous = previous2[0..previous2.length-2]
-          else
-            previous = []
+    previous = _.filter matchPoints, (point) =>
+      if @reverse
+        point.range.start.compare(cur) < 0
       else
-        previous2 = []
-    else
-        previous = previous2[..]
+        point.range.start.compare(cur) <= 0
 
     after = _.difference(matchPoints, previous)
     after.push(previous...)
