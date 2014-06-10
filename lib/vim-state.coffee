@@ -11,6 +11,380 @@ Panes = require './panes'
 Scroll = require './scroll'
 {$$, Point, Range} = require 'atom'
 Marker = require 'atom'
+net = require 'net'
+
+
+class MsgPack
+
+
+  # --- init ---
+  constructor: () ->
+    @_bin2num = {}
+    @_num2bin = {}
+    @_buf = []
+    @_idx = 0
+    @_error = 0
+    @_isArray = Array.isArray or ((mix) ->
+      Object::toString.call(mix) is "[object Array]"
+    )
+    @_toString = String.fromCharCode
+    @_MAX_DEPTH = 512
+    i = 0
+    v = undefined
+    while i < 0x100
+      v = @_toString(i)
+      @_bin2num[v] = i # "\00" -> 0x00
+      @_num2bin[i] = v #     0 -> "\00"
+      ++i
+
+    # http://twitter.com/edvakf/statuses/15576483807
+    i = 0x80 # [Webkit][Gecko]
+    while i < 0x100
+      @_bin2num[@_toString(0xf700 + i)] = i # "\f780" -> 0x80
+      ++i
+
+  msgpackpack: (data, toString) -> # @param Mix:
+    # @param Boolean(= false):
+    # @return ByteArray/BinaryString/false:
+    #     false is error return
+    #  [1][mix to String]    msgpack.pack({}, true) -> "..."
+    #  [2][mix to ByteArray] msgpack.pack({})       -> [...]
+    @_error = 0
+    byteArray = @encode([], data, 0)
+    (if @_error then false else (if toString then @byteArrayToByteString(byteArray) else byteArray))
+
+  # msgpack.unpack
+  msgpackunpack: (data) -> # @param BinaryString/ByteArray:
+    # @return Mix/undefined:
+    #       undefined is error return
+    #  [1][String to mix]    msgpack.unpack("...") -> {}
+    #  [2][ByteArray to mix] msgpack.unpack([...]) -> {}
+    @_buf = (if typeof data is "string" then @toByteArray(data) else data)
+    @_idx = -1
+    @decode() # mix or undefined
+
+  # inner - encoder
+  encode: (rv, mix, depth) -> # @param ByteArray: result
+    # @param Mix: source data
+    # @param Number: depth
+    size = undefined # for UTF8.encode, Array.encode, Hash.encode
+    i = undefined
+    iz = undefined
+    c = undefined
+    pos = undefined
+    high = undefined
+    low = undefined
+    sign = undefined
+    exp = undefined
+    frac = undefined
+    # for IEEE754
+    unless mix? # null or undefined -> 0xc0 ( null )
+      rv.push 0xc0
+    else if mix is false # false -> 0xc2 ( false )
+      rv.push 0xc2
+    else if mix is true # true  -> 0xc3 ( true  )
+      rv.push 0xc3
+    else
+      switch typeof mix
+        when "number"
+          if mix isnt mix # isNaN
+            rv.push 0xcb, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff # quiet NaN
+          else if mix is Infinity
+            rv.push 0xcb, 0x7f, 0xf0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 # positive infinity
+          else if Math.floor(mix) is mix # int or uint
+            if mix < 0
+
+              # int
+              if mix >= -32 # negative fixnum
+                rv.push 0xe0 + mix + 32
+              else if mix > -0x80
+                rv.push 0xd0, mix + 0x100
+              else if mix > -0x8000
+                mix += 0x10000
+                rv.push 0xd1, mix >> 8, mix & 0xff
+              else if mix > -0x80000000
+                mix += 0x100000000
+                rv.push 0xd2, mix >>> 24, (mix >> 16) & 0xff, (mix >> 8) & 0xff, mix & 0xff
+              else
+                high = Math.floor(mix / 0x100000000)
+                low = mix & 0xffffffff
+                rv.push 0xd3, (high >> 24) & 0xff, (high >> 16) & 0xff, (high >> 8) & 0xff, high & 0xff, (low >> 24) & 0xff, (low >> 16) & 0xff, (low >> 8) & 0xff, low & 0xff
+            else
+
+              # uint
+              if mix < 0x80
+                rv.push mix # positive fixnum
+              else if mix < 0x100 # uint 8
+                rv.push 0xcc, mix
+              else if mix < 0x10000 # uint 16
+                rv.push 0xcd, mix >> 8, mix & 0xff
+              else if mix < 0x100000000 # uint 32
+                rv.push 0xce, mix >>> 24, (mix >> 16) & 0xff, (mix >> 8) & 0xff, mix & 0xff
+              else
+                high = Math.floor(mix / 0x100000000)
+                low = mix & 0xffffffff
+                rv.push 0xcf, (high >> 24) & 0xff, (high >> 16) & 0xff, (high >> 8) & 0xff, high & 0xff, (low >> 24) & 0xff, (low >> 16) & 0xff, (low >> 8) & 0xff, low & 0xff
+          else # double
+            # THX!! @edvakf
+            # http://javascript.g.hatena.ne.jp/edvakf/20101128/1291000731
+            sign = mix < 0
+            sign and (mix *= -1)
+
+            # add offset 1023 to ensure positive
+            # 0.6931471805599453 = Math.LN2;
+            exp = ((Math.log(mix) / 0.6931471805599453) + 1023) | 0
+
+            # shift 52 - (exp - 1023) bits to make integer part exactly 53 bits,
+            # then throw away trash less than decimal point
+            frac = mix * Math.pow(2, 52 + 1023 - exp)
+
+            #  S+-Exp(11)--++-----------------Fraction(52bits)-----------------------+
+            #  ||          ||                                                        |
+            #  v+----------++--------------------------------------------------------+
+            #  00000000|00000000|00000000|00000000|00000000|00000000|00000000|00000000
+            #  6      5    55  4        4        3        2        1        8        0
+            #  3      6    21  8        0        2        4        6
+            #
+            #  +----------high(32bits)-----------+ +----------low(32bits)------------+
+            #  |                                 | |                                 |
+            #  +---------------------------------+ +---------------------------------+
+            #  3      2    21  1        8        0
+            #  1      4    09  6
+            low = frac & 0xffffffff
+            sign and (exp |= 0x800)
+            high = ((frac / 0x100000000) & 0xfffff) | (exp << 20)
+            rv.push 0xcb, (high >> 24) & 0xff, (high >> 16) & 0xff, (high >> 8) & 0xff, high & 0xff, (low >> 24) & 0xff, (low >> 16) & 0xff, (low >> 8) & 0xff, low & 0xff
+        when "string"
+
+          # http://d.hatena.ne.jp/uupaa/20101128
+          iz = mix.length
+          pos = rv.length # keep rewrite position
+          rv.push 0 # placeholder
+
+          # utf8.encode
+          i = 0
+          while i < iz
+            c = mix.charCodeAt(i)
+            if c < 0x80 # ASCII(0x00 ~ 0x7f)
+              rv.push c & 0x7f
+            else if c < 0x0800
+              rv.push ((c >>> 6) & 0x1f) | 0xc0, (c & 0x3f) | 0x80
+            else rv.push ((c >>> 12) & 0x0f) | 0xe0, ((c >>> 6) & 0x3f) | 0x80, (c & 0x3f) | 0x80  if c < 0x10000
+            ++i
+          size = rv.length - pos - 1
+          if size < 32
+            rv[pos] = 0xa0 + size # rewrite
+          else if size < 0x10000 # 16
+            rv.splice pos, 1, 0xda, size >> 8, size & 0xff
+          # 32
+          else rv.splice pos, 1, 0xdb, size >>> 24, (size >> 16) & 0xff, (size >> 8) & 0xff, size & 0xff  if size < 0x100000000
+        else # array or hash
+          if ++depth >= @_MAX_DEPTH
+            @_error = 1 # CYCLIC_REFERENCE_ERROR
+            return rv = [] # clear
+          if @_isArray(mix)
+            size = mix.length
+            if size < 16
+              rv.push 0x90 + size
+            else if size < 0x10000 # 16
+              rv.push 0xdc, size >> 8, size & 0xff
+            # 32
+            else rv.push 0xdd, size >>> 24, (size >> 16) & 0xff, (size >> 8) & 0xff, size & 0xff  if size < 0x100000000
+            i = 0
+            while i < size
+              @encode rv, mix[i], depth
+              ++i
+          else # hash
+            # http://d.hatena.ne.jp/uupaa/20101129
+            pos = rv.length # keep rewrite position
+            rv.push 0 # placeholder
+            size = 0
+            for i of mix
+              ++size
+              encode rv, i, depth
+              encode rv, mix[i], depth
+            if size < 16
+              rv[pos] = 0x80 + size # rewrite
+            else if size < 0x10000 # 16
+              rv.splice pos, 1, 0xde, size >> 8, size & 0xff
+            # 32
+            else rv.splice pos, 1, 0xdf, size >>> 24, (size >> 16) & 0xff, (size >> 8) & 0xff, size & 0xff  if size < 0x100000000
+    rv
+
+  # inner - decoder
+  decode: -> # @return Mix:
+    size = undefined
+    i = undefined
+    iz = undefined
+    c = undefined
+    num = 0
+    sign = undefined
+    exp = undefined
+    frac = undefined
+    ary = undefined
+    hash = undefined
+    buf = @_buf
+    type = buf[++@_idx]
+    # alert buf
+    # alert @_idx
+    # alert type
+    console.log 'type:'+type
+    # Negative FixNum (111x xxxx) (-32 ~ -1)
+    return type - 0x100  if type >= 0xe0
+    if type < 0xc0
+      # Positive FixNum (0xxx xxxx) (0 ~ 127)
+      return type  if type < 0x80
+      if type < 0x90 # FixMap (1000 xxxx)
+        num = type - 0x80
+        type = 0x80
+      else if type < 0xa0 # FixArray (1001 xxxx)
+        num = type - 0x90
+        type = 0x90
+      else # if (type < 0xc0) {   // FixRaw (101x xxxx)
+        num = type - 0xa0
+        type = 0xa0
+    switch type
+      when 0xc0
+        return null
+      when 0xc2
+        return false
+      when 0xc3
+        return true
+      when 0xca # float
+        num = buf[++@_idx] * 0x1000000 + (buf[++@_idx] << 16) + (buf[++@_idx] << 8) + buf[++@_idx]
+        sign = num & 0x80000000 #  1bit
+        exp = (num >> 23) & 0xff #  8bits
+        frac = num & 0x7fffff # 23bits
+        # 0.0 or -0.0
+        return 0  if not num or num is 0x80000000
+        # NaN or Infinity
+        return (if frac then NaN else Infinity)  if exp is 0xff
+        return ((if sign then -1 else 1)) * (frac | 0x800000) * Math.pow(2, exp - 127 - 23) # 127: bias
+      when 0xcb # double
+        num = buf[++@_idx] * 0x1000000 + (buf[++@_idx] << 16) + (buf[++@_idx] << 8) + buf[++@_idx]
+        sign = num & 0x80000000 #  1bit
+        exp = (num >> 20) & 0x7ff # 11bits
+        frac = num & 0xfffff # 52bits - 32bits (high word)
+        if not num or num is 0x80000000 # 0.0 or -0.0
+          @_idx += 4
+          return 0
+        if exp is 0x7ff # NaN or Infinity
+          @_idx += 4
+          return (if frac then NaN else Infinity)
+        num = buf[++@_idx] * 0x1000000 + (buf[++@_idx] << 16) + (buf[++@_idx] << 8) + buf[++@_idx]
+        # 1023: bias
+        return ((if sign then -1 else 1)) * ((frac | 0x100000) * Math.pow(2, exp - 1023 - 20) + num * Math.pow(2, exp - 1023 - 52))
+
+      # 0xcf: uint64, 0xce: uint32, 0xcd: uint16
+      when 0xcf
+        num = buf[++@_idx] * 0x1000000 + (buf[++@_idx] << 16) + (buf[++@_idx] << 8) + buf[++@_idx]
+        return num * 0x100000000 + buf[++@_idx] * 0x1000000 + (buf[++@_idx] << 16) + (buf[++@_idx] << 8) + buf[++@_idx]
+      when 0xce
+        num += buf[++@_idx] * 0x1000000 + (buf[++@_idx] << 16)
+      when 0xcd
+        num += buf[++@_idx] << 8
+      when 0xcc
+        return num + buf[++@_idx]
+
+      # 0xd3: int64, 0xd2: int32, 0xd1: int16, 0xd0: int8
+      when 0xd3
+        num = buf[++@_idx]
+        # sign -> avoid overflow
+        return ((num ^ 0xff) * 0x100000000000000 + (buf[++@_idx] ^ 0xff) * 0x1000000000000 + (buf[++@_idx] ^ 0xff) * 0x10000000000 + (buf[++@_idx] ^ 0xff) * 0x100000000 + (buf[++@_idx] ^ 0xff) * 0x1000000 + (buf[++@_idx] ^ 0xff) * 0x10000 + (buf[++@_idx] ^ 0xff) * 0x100 + (buf[++@_idx] ^ 0xff) + 1) * -1  if num & 0x80
+        return num * 0x100000000000000 + buf[++@_idx] * 0x1000000000000 + buf[++@_idx] * 0x10000000000 + buf[++@_idx] * 0x100000000 + buf[++@_idx] * 0x1000000 + buf[++@_idx] * 0x10000 + buf[++@_idx] * 0x100 + buf[++@_idx]
+      when 0xd2
+        num = buf[++@_idx] * 0x1000000 + (buf[++@_idx] << 16) + (buf[++@_idx] << 8) + buf[++@_idx]
+        return (if num < 0x80000000 then num else num - 0x100000000) # 0x80000000 * 2
+      when 0xd1
+        num = (buf[++@_idx] << 8) + buf[++@_idx]
+        return (if num < 0x8000 then num else num - 0x10000) # 0x8000 * 2
+      when 0xd0
+        num = buf[++@_idx]
+        return (if num < 0x80 then num else num - 0x100) # 0x80 * 2
+      # 0xdb: raw32, 0xda: raw16, 0xa0: raw ( string )
+      when 0xdb
+        num += buf[++@_idx] * 0x1000000 + (buf[++@_idx] << 16)
+      when 0xda
+        num += (buf[++@_idx] << 8) + buf[++@_idx]
+      when 0xa0 # utf8.decode
+        ary = []
+        i = @_idx
+        iz = i + num
+
+        while i < iz
+          c = buf[++i] # lead byte
+          # ASCII(0x00 ~ 0x7f)
+          ary.push (if c < 0x80 then c else (if c < 0xe0 then ((c & 0x1f) << 6 | (buf[++i] & 0x3f)) else ((c & 0x0f) << 12 | (buf[++i] & 0x3f) << 6 | (buf[++i] & 0x3f))))
+        @_idx = i
+        return (if ary.length < 10240 then @_toString.apply(null, ary) else @byteArrayToByteString(ary))
+
+      # 0xdf: map32, 0xde: map16, 0x80: map
+      when 0xdf
+        num += buf[++@_idx] * 0x1000000 + (buf[++@_idx] << 16)
+      when 0xde
+        num += (buf[++@_idx] << 8) + buf[++@_idx]
+      when 0x80
+        hash = {}
+        while num--
+
+          # make key/value pair
+          size = buf[++@_idx] - 0xa0
+          ary = []
+          i = @_idx
+          iz = i + size
+
+          while i < iz
+            c = buf[++i] # lead byte
+            # ASCII(0x00 ~ 0x7f)
+            ary.push (if c < 0x80 then c else (if c < 0xe0 then ((c & 0x1f) << 6 | (buf[++i] & 0x3f)) else ((c & 0x0f) << 12 | (buf[++i] & 0x3f) << 6 | (buf[++i] & 0x3f))))
+          @_idx = i
+          hash[@_toString.apply(null, ary)] = @decode()
+        return hash
+
+      # 0xdd: array32, 0xdc: array16, 0x90: array
+      when 0xdd
+        num += buf[++@_idx] * 0x1000000 + (buf[++@_idx] << 16)
+      when 0xdc
+        num += (buf[++@_idx] << 8) + buf[++@_idx]
+      when 0x90
+        ary = []
+        ary.push @decode()  while num--
+        return ary
+    return
+
+  # inner - byteArray To ByteString
+  byteArrayToByteString: (byteArray) -> # @param ByteArray
+    # @return String
+    # http://d.hatena.ne.jp/uupaa/20101128
+    try
+      return @_toString.apply(this, byteArray) # toString
+    # avoid "Maximum call stack size exceeded"
+    rv = []
+    i = 0
+    iz = byteArray.length
+    num2bin = @_num2bin
+    while i < iz
+      rv[i] = num2bin[byteArray[i]]
+      ++i
+    rv.join ""
+
+  # inner - BinaryString To ByteArray
+  toByteArray: (data) -> # @param BinaryString: "\00\01"
+    # @return ByteArray: [0x00, 0x01]
+    rv = []
+    bin2num = @_bin2num
+    remain = undefined
+    ary = data.split("")
+    i = -1
+    iz = undefined
+    iz = ary.length
+    remain = iz % 8
+    while remain--
+      ++i
+      rv[i] = bin2num[ary[i]]
+    remain = iz >> 3
+    rv.push bin2num[ary[++i]], bin2num[ary[++i]], bin2num[ary[++i]], bin2num[ary[++i]], bin2num[ary[++i]], bin2num[ary[++i]], bin2num[ary[++i]], bin2num[ary[++i]]  while remain--
+    rv
 
 module.exports =
 class VimState
@@ -35,6 +409,28 @@ class VimState
       @activateInsertMode()
     else
       @activateCommandMode()
+
+    socket = new net.Socket()
+    socket.connect('/Users/carlos/tmp/neovim');
+    msgpack = new MsgPack()
+    msg = msgpack.msgpackpack([0,1,0,[]])
+    upa = msgpack.msgpackunpack(msg)
+    console.log upa
+
+    console.log msg
+    socket.on('data', (data) =>
+        console.log data.toString()
+        dl = []
+        i = 0
+        while i < data.length
+          dl.push data[i]
+          ++i
+        console.log dl
+        q = msgpack.msgpackunpack(dl)
+        console.log q
+    )
+    socket.write(new Buffer(msg))
+
 
     atom.project.eachBuffer (buffer) =>
       @registerChangeHandler(buffer)
