@@ -750,7 +750,7 @@ class VimState
     else
       @activateCommandMode()
     socket = new net.Socket()
-    socket.connect('/Users/carlos/tmp/neovim');
+    socket.connect('/Users/carlos/tmp/neovim9');
     msg = encode_pub([0,1,0,[]])
     upa = decode_pub(msg)
     console.log 'upa'
@@ -770,10 +770,6 @@ class VimState
     )
     socket.write(msg)
     @neovim_send_message([0,1,39,[]])
-#    @neovim_send_message([0,1,3,[4,1,'guevo']])
-#    @neovim_send_message([0,1,3,[4,1,'paloma']])
-#    @neovim_send_message([0,1,3,[4,1,'palomita']])
-
     @neovim_send_message([0,1,23,['e! '+@editor.getUri()]])
 
     # @neovim_send_message([0,1,22,['jjj']])
@@ -781,23 +777,71 @@ class VimState
     atom.project.eachBuffer (buffer) =>
       @registerChangeHandler(buffer)
 
-    @editorView.on 'cursor:moved', =>
-      pos = @editor.getCursorBufferPosition()
-      arr = pos.toArray()
+    @neovim_subscribe('redraw:cursor', (q) =>
+      @editor.setCursorBufferPosition(new Point(parseInt(q.row),parseInt(q.col)))
+    )
 
-      console.log 'cal cursor( '+(parseInt(arr[0])+1)+','+(parseInt(arr[1])+1)+')'
-      @neovim_send_message([0,1,23,['cal cursor( '+(parseInt(arr[0])+1)+','+(parseInt(arr[1])+1)+')']])
+    @neovim_subscribe('redraw:update_line', (q) =>
+      console.log q
+    )
+    @editorView.on 'editor:min-width-changed', @editorSizeChanged
+    atom.workspaceView.on 'pane-container:active-pane-item-changed', @activePaneChanged
 
 
-  neovim_send_message:(message) ->
+  activePaneChanged: =>
+    @neovim_send_message([0,1,23,['e! '+atom.workspaceView.getActiveView().getEditor().getUri()]])
+    @neovim_send_message([0,1,23,['set scrolloff=2']])
+    @editorSizeChanged
+
+
+  editorSizeChanged: =>
+    height = @editorView.getPageRows()
+    @neovim_send_message([0,1,42,[]], ((q) => @neovim_send_message([0,1,55,[q[0],height]])) )
+
+
+  neovim_subscribe:(event,f) ->
     socket2 = new net.Socket()
-    socket2.connect('/Users/carlos/tmp/neovim');
+    socket2.connect('/Users/carlos/tmp/neovim9');
+    collected = new Buffer(0)
     socket2.on('data', (data) =>
-        console.log data.toString()
-        console.log data
-        console.log to_uint8array(data)
+        # console.log data
+        # console.log collected
+        collected = Buffer.concat([collected, data]);
+        console.log "SUBSCRIBE:"
+        # console.log data.toString()
+        # console.log data
+        # console.log to_uint8array(data)
+        i = 0
+        while i <= collected.length
+          try
+            q = decode_pub(to_uint8array(collected.slice(0,i)))
+            collected = collected.slice(i,collected.length)
+            console.log q
+            if q[1] == event
+              f(q[2])
+            console.log "END SUBSCRIBE:"
+            i = -1
+          catch err
+          i = i + 1
+
+    )
+    msg2 = encode_pub([0,1,48,[event]])
+    socket2.write(msg2)
+    # msg2 = encode_pub([0,1,48,['redraw:update_line']])
+    # socket2.write(msg2)
+
+
+  neovim_send_message:(message,f = undefined) ->
+    socket2 = new net.Socket()
+    socket2.connect('/Users/carlos/tmp/neovim9');
+    socket2.on('data', (data) =>
+        # console.log data.toString()
+        # console.log data
+        # console.log to_uint8array(data)
         q = decode_pub(to_uint8array(data))
-        console.log q
+        if f
+          f(q)
+        # console.log q
     )
     msg2 = encode_pub(message)
     socket2.write(msg2)
