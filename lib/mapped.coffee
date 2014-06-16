@@ -1,7 +1,6 @@
 no_weakmap_get = (target) ->
   new DataView(target, 0)
 get = (target) ->
-  console.log target.buffer
   out = map.get(target.buffer)
   map.set target.buffer, out = new DataView(target.buffer, 0)  unless out
   out
