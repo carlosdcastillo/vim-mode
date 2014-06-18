@@ -741,6 +741,7 @@ class VimState
     params = {}
     params.manager = this;
     params.id = 0;
+    @sockets = []
 
     @setupCommandMode()
     @registerInsertIntercept()
@@ -749,6 +750,21 @@ class VimState
       @activateInsertMode()
     else
       @activateCommandMode()
+
+
+    atom.workspaceView.on 'focusout', ".editor:not(.mini)", (event) =>
+      editor = $(event.target).closest('.editor').view()?.getModel()
+      @destroy_sockets(editor)
+
+    atom.workspaceView.on 'pane:before-item-destroyed', (event, paneItem) =>
+      @destroy_sockets(paneItem)
+
+    $(window).preempt 'beforeunload', =>
+      for pane in atom.workspaceView.getPanes()
+        @destroy_sockets(paneItem) for paneItem in pane.getItems()
+
+
+
     socket = new net.Socket()
     socket.connect('/Users/carlos/tmp/neovim9');
     msg = encode_pub([0,1,0,[]])
@@ -769,6 +785,7 @@ class VimState
         discovered = true
     )
     socket.write(msg)
+    @sockets.push(socket)
     @neovim_send_message([0,1,39,[]])
     @neovim_send_message([0,1,23,['e! '+@editor.getUri()]])
 
@@ -777,6 +794,17 @@ class VimState
     atom.project.eachBuffer (buffer) =>
       @registerChangeHandler(buffer)
 
+    atom.workspaceView.on 'pane-container:active-pane-item-changed', @activePaneChanged
+
+  destroy_sockets:(editor) =>
+    if editor.getUri() != @editor.getUri()
+      for item in @sockets
+        item.destroy()
+       @sockets = []
+
+  activePaneChanged: =>
+    @neovim_send_message([0,1,23,['e! '+atom.workspaceView.getActiveView().getEditor().getUri()]])
+    @neovim_send_message([0,1,23,['set scrolloff=2']])
     @neovim_subscribe('redraw:cursor', (q) =>
       @editor.setCursorBufferPosition(new Point(parseInt(q.row),parseInt(q.col)))
     )
@@ -785,12 +813,6 @@ class VimState
       console.log q
     )
     @editorView.on 'editor:min-width-changed', @editorSizeChanged
-    atom.workspaceView.on 'pane-container:active-pane-item-changed', @activePaneChanged
-
-
-  activePaneChanged: =>
-    @neovim_send_message([0,1,23,['e! '+atom.workspaceView.getActiveView().getEditor().getUri()]])
-    @neovim_send_message([0,1,23,['set scrolloff=2']])
     @editorSizeChanged
 
 
@@ -827,6 +849,7 @@ class VimState
     )
     msg2 = encode_pub([0,1,48,[event]])
     socket2.write(msg2)
+    @sockets.push(socket2)
     # msg2 = encode_pub([0,1,48,['redraw:update_line']])
     # socket2.write(msg2)
 
@@ -845,6 +868,7 @@ class VimState
     )
     msg2 = encode_pub(message)
     socket2.write(msg2)
+    @sockets.push(socket2)
 
   # Private: Creates a handle to block insertion while in command mode.
   #
