@@ -764,6 +764,9 @@ class VimState
         @destroy_sockets(paneItem) for paneItem in pane.getItems()
 
 
+    @range_list = []
+    for i in [0..100]
+      @range_list.push(new Range(new Point(0,0), new Point(0,0)))
 
     socket = new net.Socket()
     socket.connect('/Users/carlos/tmp/neovim9');
@@ -794,6 +797,8 @@ class VimState
     atom.project.eachBuffer (buffer) =>
       @registerChangeHandler(buffer)
 
+    @editorView.on 'editor:min-width-changed', @editorSizeChanged
+    @editorSizeChanged
     atom.workspaceView.on 'pane-container:active-pane-item-changed', @activePaneChanged
 
   destroy_sockets:(editor) =>
@@ -806,11 +811,36 @@ class VimState
     @neovim_send_message([0,1,23,['e! '+atom.workspaceView.getActiveView().getEditor().getUri()]])
     @neovim_send_message([0,1,23,['set scrolloff=2']])
     @neovim_subscribe('redraw:cursor', (q) =>
+      rngl = @editor.getSelectedBufferRanges()
       @editor.setCursorBufferPosition(new Point(parseInt(q.row),parseInt(q.col)))
+      allempty = true
+      for rng in rngl
+        if not rng.isEmpty()
+          allempty = false
+          break
+      if not allempty
+        @editor.setSelectedBufferRanges(rngl)
     )
 
     @neovim_subscribe('redraw:update_line', (q) =>
-      console.log q
+      qrow = parseInt(q['row'])
+      if 'attributes' of q
+        r = q['attributes']
+        for key of r
+          if key.indexOf('bg') == 0
+            s = r[key]
+            s0 = parseInt(s[0][0])
+            if s[0].length > 1
+              s1 = parseInt(s[0][1])
+              rng = @editor.bufferRangeForScreenRange(new Range(new Point(qrow,s0), new Point(qrow,s1)))
+            else
+              rng = @editor.bufferRangeForScreenRange(new Range(new Point(qrow,s0), new Point(qrow,s0+1)))
+      else
+        rng = (new Range(new Point(0,0), new Point(0,0)))
+
+      @range_list[qrow] = rng
+      # console.log @range_list.toString()
+      @editor.setSelectedBufferRanges(@range_list,{})
     )
     @editorView.on 'editor:min-width-changed', @editorSizeChanged
     @editorSizeChanged
@@ -818,7 +848,10 @@ class VimState
 
   editorSizeChanged: =>
     height = @editorView.getPageRows()
-    @neovim_send_message([0,1,42,[]], ((q) => @neovim_send_message([0,1,55,[q[0],height]])) )
+    @range_list = []
+    for i in [0..height-1]
+      @range_list.push(new Range(new Point(0,0), new Point(0,0)))
+    @neovim_send_message([0,1,23,['set lines='+height]])
 
 
   neovim_subscribe:(event,f) ->
@@ -829,7 +862,7 @@ class VimState
         # console.log data
         # console.log collected
         collected = Buffer.concat([collected, data]);
-        console.log "SUBSCRIBE:"
+        # console.log "SUBSCRIBE:"
         # console.log data.toString()
         # console.log data
         # console.log to_uint8array(data)
@@ -838,10 +871,10 @@ class VimState
           try
             q = decode_pub(to_uint8array(collected.slice(0,i)))
             collected = collected.slice(i,collected.length)
-            console.log q
+            # console.log q
             if q[1] == event
               f(q[2])
-            console.log "END SUBSCRIBE:"
+            # console.log "END SUBSCRIBE:"
             i = -1
           catch err
           i = i + 1
