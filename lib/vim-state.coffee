@@ -426,8 +426,9 @@ Decoder::parse = ->
 decode_pub = (buffer) ->
   decoder = new Decoder(buffer)
   value = decoder.parse()
-  throw new Error((buffer.length - decoder.offset) + " trailing bytes")  if decoder.offset isnt buffer.length
-  value
+  # throw new Error((buffer.length - decoder.offset) + " trailing bytes")  if decoder.offset isnt buffer.length
+  {value:value, trailing:buffer.length - decoder.offset}
+
 encodeableKeys = (value) ->
   Object.keys(value).filter (e) ->
     "function" isnt typeof value[e] or !!value[e].toJSON
@@ -763,34 +764,35 @@ class VimState
       for pane in atom.workspaceView.getPanes()
         @destroy_sockets(paneItem) for paneItem in pane.getItems()
 
+    @height = 100
+    @line_list = []
+    for i in [0..@height-1]
+      @line_list.push(i+1)
 
     @range_list = []
-    for i in [0..100]
-      @range_list.push(new Range(new Point(0,0), new Point(0,0)))
+    @range_line_list = []
+
+    @subscriptions = {}
+    @subscriptions['redraw:cursor'] = false;
+    @subscriptions['redraw:update_line'] = false;
+    @subscriptions['redraw:layout'] = false;
+    @subscriptions['redraw:foreground_color'] = false
+    @subscriptions['redraw:background_color'] = false
 
     socket = new net.Socket()
-    socket.connect('/Users/carlos/tmp/neovim9');
-    msg = encode_pub([0,1,0,[]])
-    upa = decode_pub(msg)
-    console.log 'upa'
-    console.log upa
+    socket.connect('/Users/carlos/tmp/neovim14');
 
-    console.log msg
-    discovered = false
     socket.on('data', (data) =>
-        console.log data.toString()
-        console.log data
-        console.log to_uint8array(data)
-        q = decode_pub(to_uint8array(data))
-        console.log q
-        qq = decode_pub(str2ab(q[3][1]))
-        console.log qq
-        discovered = true
+        {value:q,trailing} = decode_pub(to_uint8array(data))
+        {value:qq,trailing} = decode_pub(str2ab(q[3][1]))
     )
+    msg = encode_pub([0,1,0,[]])
     socket.write(msg)
     @sockets.push(socket)
     @neovim_send_message([0,1,39,[]])
     @neovim_send_message([0,1,23,['e! '+@editor.getUri()]])
+    @neovim_send_message([0,1,23,['set scrolloff=2']])
+    @neovim_send_message([0,1,23,['set nu']])
 
     # @neovim_send_message([0,1,22,['jjj']])
     # @neovim_send_message([0,1,22,['l']])
@@ -798,110 +800,153 @@ class VimState
       @registerChangeHandler(buffer)
 
     @editorView.on 'editor:min-width-changed', @editorSizeChanged
-    @editorSizeChanged
     atom.workspaceView.on 'pane-container:active-pane-item-changed', @activePaneChanged
 
   destroy_sockets:(editor) =>
-    if editor.getUri() != @editor.getUri()
-      for item in @sockets
-        item.destroy()
-       @sockets = []
+    if @subscriptions['redraw:cursor'] or @subscriptions['redraw:update_line']
+      if editor.getUri() != @editor.getUri()
+        for item in @sockets
+          item.end()
+          item.destroy()
+        @sockets = []
+        @subscriptions['redraw:cursor'] = false
+        @subscriptions['redraw:update_line'] = false
+        @subscriptions['redraw:layout'] = false
+        @subscriptions['redraw:foreground_color'] = false
+        @subscriptions['redraw:background_color'] = false
+
 
   activePaneChanged: =>
+
     @neovim_send_message([0,1,23,['e! '+atom.workspaceView.getActiveView().getEditor().getUri()]])
     @neovim_send_message([0,1,23,['set scrolloff=2']])
-    @neovim_subscribe('redraw:cursor', (q) =>
-      rngl = @editor.getSelectedBufferRanges()
-      @editor.setCursorBufferPosition(new Point(parseInt(q.row),parseInt(q.col)))
-      allempty = true
-      for rng in rngl
-        if not rng.isEmpty()
-          allempty = false
-          break
-      if not allempty
-        @editor.setSelectedBufferRanges(rngl)
-    )
+    @neovim_send_message([0,1,23,['set nu']])
 
-    @neovim_subscribe('redraw:update_line', (q) =>
-      qrow = parseInt(q['row'])
-      if 'attributes' of q
-        r = q['attributes']
-        for key of r
-          if key.indexOf('bg') == 0
-            s = r[key]
-            s0 = parseInt(s[0][0])
-            if s[0].length > 1
-              s1 = parseInt(s[0][1])
-              rng = @editor.bufferRangeForScreenRange(new Range(new Point(qrow,s0), new Point(qrow,s1)))
-            else
-              rng = @editor.bufferRangeForScreenRange(new Range(new Point(qrow,s0), new Point(qrow,s0+1)))
-      else
-        rng = (new Range(new Point(0,0), new Point(0,0)))
+    if not @subscriptions['redraw:background_color']
+      @neovim_subscribe('redraw:background_color', (q) =>
+        # console.log "r:bgc:"
+        # console.log q
+      )
+    if not @subscriptions['redraw:foreground_color']
+      @neovim_subscribe('redraw:foreground_color', (q) =>
+        # console.log "r:fgc:"
+        # console.log q
+      )
+    if not @subscriptions['redraw:layout']
+      @neovim_subscribe('redraw:layout', (q) =>
+        # console.log "r:lo:"
+        # console.log q
+      )
 
-      @range_list[qrow] = rng
-      # console.log @range_list.toString()
-      @editor.setSelectedBufferRanges(@range_list,{})
-    )
+    if not @subscriptions['redraw:cursor']
+      @neovim_subscribe('redraw:cursor', (q) =>
+        # console.log q
+        @editor.setCursorBufferPosition(new Point(parseInt(q.row),parseInt(q.col)))
+        allempty = true
+        for rng in @range_list
+          if not rng.isEmpty()
+            allempty = false
+            break
+        if not allempty
+          @editor.setSelectedBufferRanges(@range_list)
+      )
+
+    if not @subscriptions['redraw:update_line']
+
+      @neovim_subscribe('redraw:update_line', (q) =>
+        try
+          qline = q['line']
+          lineno = parseInt(qline[0]['content'])
+          linelen = qline[0]['content'].length
+          qrow = parseInt(q['row'])
+          @line_list[qrow] = lineno
+          for i in [0..@height-1]
+            if i != qrow
+              @line_list[i] = lineno - (qrow - i)
+
+          rng = (new Range(new Point(0,0), new Point(0,0)))
+
+          if 'attributes' of q
+            r = q['attributes']
+            for key of r
+              if key.indexOf('bg') == 0
+                s = r[key]
+                s0 = parseInt(s[0][0])
+                if s[0].length > 1
+                  s1 = parseInt(s[0][1])
+                  rng = new Range(new Point(qrow+@line_list[0],s0-linelen), new Point(qrow+@line_list[0],s1-linelen))
+                else
+                  rng = new Range(new Point(qrow+@line_list[0],s0-linelen), new Point(qrow+@line_list[0],s0-linelen+1))
+                break
+          index = @range_line_list.indexOf(qrow+@line_list[0])
+          if index isnt -1
+            @range_line_list.splice(index,1)
+            @range_list.splice(index,1)
+          @range_line_list.push qrow+@line_list[0]
+          @range_list.push rng
+          @editor.setSelectedBufferRanges(@range_list,{})
+        catch err
+          console.log 'el error:'+err
+
+        # console.log(@line_list)
+      )
     @editorView.on 'editor:min-width-changed', @editorSizeChanged
-    @editorSizeChanged
 
 
   editorSizeChanged: =>
-    height = @editorView.getPageRows()
-    @range_list = []
-    for i in [0..height-1]
-      @range_list.push(new Range(new Point(0,0), new Point(0,0)))
-    @neovim_send_message([0,1,23,['set lines='+height]])
+    @height = @editorView.getPageRows()
+    @line_list = []
+    for i in [0..@height-1]
+      @line_list.push(i+1)
+    @neovim_send_message([0,1,23,['set lines='+@height]])
 
 
   neovim_subscribe:(event,f) ->
     socket2 = new net.Socket()
-    socket2.connect('/Users/carlos/tmp/neovim9');
+    socket2.connect('/Users/carlos/tmp/neovim14');
     collected = new Buffer(0)
     socket2.on('data', (data) =>
-        # console.log data
-        # console.log collected
         collected = Buffer.concat([collected, data]);
-        # console.log "SUBSCRIBE:"
-        # console.log data.toString()
-        # console.log data
-        # console.log to_uint8array(data)
-        i = 0
+        i = 1
         while i <= collected.length
           try
-            q = decode_pub(to_uint8array(collected.slice(0,i)))
-            collected = collected.slice(i,collected.length)
-            # console.log q
-            if q[1] == event
-              f(q[2])
-            # console.log "END SUBSCRIBE:"
-            i = -1
+            {value:q,trailing} = decode_pub(to_uint8array(collected.slice(0,i)))
+            if trailing == 0
+              collected = collected.slice(i,collected.length)
+              if q[1] == event
+                f(q[2])
+              i = 1
+            else
+              if trailing < 0
+                i = i - trailing
+              else
+                i = i + trailing
           catch err
-          i = i + 1
+            i = i + 1
+
 
     )
     msg2 = encode_pub([0,1,48,[event]])
     socket2.write(msg2)
     @sockets.push(socket2)
-    # msg2 = encode_pub([0,1,48,['redraw:update_line']])
-    # socket2.write(msg2)
+    @subscriptions[event] = true
 
 
   neovim_send_message:(message,f = undefined) ->
     socket2 = new net.Socket()
-    socket2.connect('/Users/carlos/tmp/neovim9');
+    socket2.connect('/Users/carlos/tmp/neovim14');
     socket2.on('data', (data) =>
         # console.log data.toString()
         # console.log data
         # console.log to_uint8array(data)
-        q = decode_pub(to_uint8array(data))
+        {value:q, trailing:t} = decode_pub(to_uint8array(data))
         if f
           f(q)
+        socket2.destroy()
         # console.log q
     )
     msg2 = encode_pub(message)
     socket2.write(msg2)
-    @sockets.push(socket2)
 
   # Private: Creates a handle to block insertion while in command mode.
   #
