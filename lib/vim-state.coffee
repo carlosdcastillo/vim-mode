@@ -802,6 +802,7 @@ class VimState
     @editorView.on 'editor:min-width-changed', @editorSizeChanged
     atom.workspaceView.on 'pane-container:active-pane-item-changed', @activePaneChanged
 
+
   destroy_sockets:(editor) =>
     if @subscriptions['redraw:cursor'] or @subscriptions['redraw:update_line']
       if editor.getUri() != @editor.getUri()
@@ -840,15 +841,22 @@ class VimState
 
     if not @subscriptions['redraw:cursor']
       @neovim_subscribe('redraw:cursor', (q) =>
-        # console.log q
-        @editor.setCursorBufferPosition(new Point(parseInt(q.row),parseInt(q.col)))
-        allempty = true
-        for rng in @range_list
-          if not rng.isEmpty()
-            allempty = false
-            break
-        if not allempty
-          @editor.setSelectedBufferRanges(@range_list)
+        try
+
+          lineHeightInPixels = 19;
+          @editor.setScrollTop((@line_list[0]-1)*lineHeightInPixels);
+
+          @editor.setCursorBufferPosition(new Point(parseInt(q.row),parseInt(q.col)),{autoscroll:false})
+          allempty = true
+          for rng in @range_list
+            if not rng.isEmpty()
+              allempty = false
+              break
+          if not allempty
+            @editor.setSelectedBufferRanges(@range_list)
+        catch err
+          console.log 'redraw cursor error:'+err
+
       )
 
     if not @subscriptions['redraw:update_line']
@@ -863,6 +871,9 @@ class VimState
           for i in [0..@height-1]
             if i != qrow
               @line_list[i] = lineno - (qrow - i)
+
+
+
 
           rng = (new Range(new Point(0,0), new Point(0,0)))
 
@@ -882,9 +893,11 @@ class VimState
           if index isnt -1
             @range_line_list.splice(index,1)
             @range_list.splice(index,1)
-          @range_line_list.push qrow+@line_list[0]
-          @range_list.push rng
-          @editor.setSelectedBufferRanges(@range_list,{})
+          if not rng.isEmpty()
+            @range_line_list.push qrow+@line_list[0]
+            @range_list.push rng
+          if @range_list.length > 0
+            @editor.setSelectedBufferRanges(@range_list,{})
         catch err
           console.log 'el error:'+err
 
