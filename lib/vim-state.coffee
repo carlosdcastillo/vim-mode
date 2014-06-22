@@ -791,7 +791,7 @@ class VimState
     @neovim_send_message([0,1,23,['e! '+@editor.getUri()]])
     @neovim_send_message([0,1,23,['set scrolloff=2']])
     @neovim_send_message([0,1,23,['set nu']])
-    @neovim_send_message([0,1,23,['set nowrap']])
+    # @neovim_send_message([0,1,23,['set nowrap']])
 
     # @neovim_send_message([0,1,22,['jjj']])
     # @neovim_send_message([0,1,22,['l']])
@@ -821,7 +821,7 @@ class VimState
     @neovim_send_message([0,1,23,['e! '+atom.workspaceView.getActiveView().getEditor().getUri()]])
     @neovim_send_message([0,1,23,['set scrolloff=2']])
     @neovim_send_message([0,1,23,['set nu']])
-    @neovim_send_message([0,1,23,['set nowrap']])
+    # @neovim_send_message([0,1,23,['set nowrap']])
 
     if not @subscriptions['redraw:background_color']
       @neovim_subscribe('redraw:background_color', (q) =>
@@ -876,6 +876,18 @@ class VimState
           linelen = qline[0]['content'].length
           qrow = parseInt(q['row'])
           @line0 = lineno - qrow
+
+          if qline.length > 1
+            qlen = qline[1]['content'].length
+            linerange = new Range(new Point(qrow+@line0-1,0),new Point(qrow+@line0-1,qlen))
+            currenttext = @editor.getTextInBufferRange(linerange)
+            if currenttext isnt qline[1]['content']
+              @editor.setTextInBufferRange(linerange,qline[1]['content'])
+              console.log 'setting text in:'+qrow
+              console.log currenttext
+              console.log currenttext.length
+              console.log qline[1]['content']
+              console.log  qline[1]['content'].length
 
           rng = (new Range(new Point(0,0), new Point(0,0)))
 
