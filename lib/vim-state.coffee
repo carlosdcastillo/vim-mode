@@ -765,9 +765,7 @@ class VimState
         @destroy_sockets(paneItem) for paneItem in pane.getItems()
 
     @height = 100
-    @line_list = []
-    for i in [0..@height-1]
-      @line_list.push(i+1)
+    @line0 = 1
 
     @range_list = []
     @range_line_list = []
@@ -793,6 +791,7 @@ class VimState
     @neovim_send_message([0,1,23,['e! '+@editor.getUri()]])
     @neovim_send_message([0,1,23,['set scrolloff=2']])
     @neovim_send_message([0,1,23,['set nu']])
+    @neovim_send_message([0,1,23,['set nowrap']])
 
     # @neovim_send_message([0,1,22,['jjj']])
     # @neovim_send_message([0,1,22,['l']])
@@ -822,6 +821,7 @@ class VimState
     @neovim_send_message([0,1,23,['e! '+atom.workspaceView.getActiveView().getEditor().getUri()]])
     @neovim_send_message([0,1,23,['set scrolloff=2']])
     @neovim_send_message([0,1,23,['set nu']])
+    @neovim_send_message([0,1,23,['set nowrap']])
 
     if not @subscriptions['redraw:background_color']
       @neovim_subscribe('redraw:background_color', (q) =>
@@ -844,7 +844,7 @@ class VimState
         try
 
           lineHeightInPixels = 19;
-          @editor.setScrollTop((@line_list[0]-1)*lineHeightInPixels);
+          @editor.setScrollTop((@line0-1)*lineHeightInPixels);
 
           @editor.setCursorBufferPosition(new Point(parseInt(q.row),parseInt(q.col)),{autoscroll:false})
           allempty = true
@@ -853,7 +853,15 @@ class VimState
               allempty = false
               break
           if not allempty
-            @editor.setSelectedBufferRanges(@range_list)
+            final_range_list = []
+            for item in @range_list
+              s = item.start.toArray()
+              if s[0] == parseInt(q.row)
+                radd = new Range([parseInt(q.row), parseInt(q.col)],[parseInt(q.row), parseInt(q.col)+1])
+                final_range_list.push(item.union(radd))
+              else
+                final_range_list.push(item)
+            @editor.setSelectedBufferRanges(final_range_list)
         catch err
           console.log 'redraw cursor error:'+err
 
@@ -867,13 +875,7 @@ class VimState
           lineno = parseInt(qline[0]['content'])
           linelen = qline[0]['content'].length
           qrow = parseInt(q['row'])
-          @line_list[qrow] = lineno
-          for i in [0..@height-1]
-            if i != qrow
-              @line_list[i] = lineno - (qrow - i)
-
-
-
+          @line0 = lineno - qrow
 
           rng = (new Range(new Point(0,0), new Point(0,0)))
 
@@ -885,16 +887,17 @@ class VimState
                 s0 = parseInt(s[0][0])
                 if s[0].length > 1
                   s1 = parseInt(s[0][1])
-                  rng = new Range(new Point(qrow+@line_list[0],s0-linelen), new Point(qrow+@line_list[0],s1-linelen))
+                  rng = new Range(new Point(qrow+@line0-1,s0-linelen), new Point(qrow+@line0-1,s1-linelen))
                 else
-                  rng = new Range(new Point(qrow+@line_list[0],s0-linelen), new Point(qrow+@line_list[0],s0-linelen+1))
+                  s0 = parseInt(s[0])
+                  rng = new Range(new Point(qrow+@line0-1,s0-linelen), new Point(qrow+@line0-1,s0-linelen+1))
                 break
-          index = @range_line_list.indexOf(qrow+@line_list[0])
+          index = @range_line_list.indexOf(qrow+@line0)
           if index isnt -1
             @range_line_list.splice(index,1)
             @range_list.splice(index,1)
           if not rng.isEmpty()
-            @range_line_list.push qrow+@line_list[0]
+            @range_line_list.push qrow+@line0
             @range_list.push rng
           if @range_list.length > 0
             @editor.setSelectedBufferRanges(@range_list,{})
@@ -908,9 +911,7 @@ class VimState
 
   editorSizeChanged: =>
     @height = @editorView.getPageRows()
-    @line_list = []
-    for i in [0..@height-1]
-      @line_list.push(i+1)
+    @line0 = 1
     @neovim_send_message([0,1,23,['set lines='+@height]])
 
 
