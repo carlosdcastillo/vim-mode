@@ -778,7 +778,7 @@ class VimState
     @subscriptions['redraw:background_color'] = false
 
     socket = new net.Socket()
-    socket.connect('/Users/carlos/tmp/neovim14');
+    socket.connect('/Users/carlos/tmp/neovim15');
 
     socket.on('data', (data) =>
         {value:q,trailing} = decode_pub(to_uint8array(data))
@@ -791,7 +791,7 @@ class VimState
     @neovim_send_message([0,1,23,['e! '+@editor.getUri()]])
     @neovim_send_message([0,1,23,['set scrolloff=2']])
     @neovim_send_message([0,1,23,['set nu']])
-    # @neovim_send_message([0,1,23,['set nowrap']])
+    @neovim_send_message([0,1,23,['set nowrap']])
 
     # @neovim_send_message([0,1,22,['jjj']])
     # @neovim_send_message([0,1,22,['l']])
@@ -821,7 +821,7 @@ class VimState
     @neovim_send_message([0,1,23,['e! '+atom.workspaceView.getActiveView().getEditor().getUri()]])
     @neovim_send_message([0,1,23,['set scrolloff=2']])
     @neovim_send_message([0,1,23,['set nu']])
-    # @neovim_send_message([0,1,23,['set nowrap']])
+    @neovim_send_message([0,1,23,['set nowrap']])
 
     if not @subscriptions['redraw:background_color']
       @neovim_subscribe('redraw:background_color', (q) =>
@@ -843,9 +843,6 @@ class VimState
       @neovim_subscribe('redraw:cursor', (q) =>
         try
 
-          lineHeightInPixels = 19;
-          @editor.setScrollTop((@line0-1)*lineHeightInPixels);
-
           @editor.setCursorBufferPosition(new Point(parseInt(q.row),parseInt(q.col)),{autoscroll:false})
           allempty = true
           for rng in @range_list
@@ -862,6 +859,10 @@ class VimState
               else
                 final_range_list.push(item)
             @editor.setSelectedBufferRanges(final_range_list)
+
+          lineHeightInPixels = 19;
+          @editor.setScrollTop((@line0-1)*lineHeightInPixels);
+
         catch err
           console.log 'redraw cursor error:'+err
 
@@ -878,6 +879,7 @@ class VimState
           @line0 = lineno - qrow
 
           if qline.length > 1
+            console.log qline[1]
             qlen = qline[1]['content'].length
             linerange = new Range(new Point(qrow+@line0-1,0),new Point(qrow+@line0-1,qlen))
             currenttext = @editor.getTextInBufferRange(linerange)
@@ -929,7 +931,7 @@ class VimState
 
   neovim_subscribe:(event,f) ->
     socket2 = new net.Socket()
-    socket2.connect('/Users/carlos/tmp/neovim14');
+    socket2.connect('/Users/carlos/tmp/neovim15');
     collected = new Buffer(0)
     socket2.on('data', (data) =>
         collected = Buffer.concat([collected, data]);
@@ -960,7 +962,7 @@ class VimState
 
   neovim_send_message:(message,f = undefined) ->
     socket2 = new net.Socket()
-    socket2.connect('/Users/carlos/tmp/neovim14');
+    socket2.connect('/Users/carlos/tmp/neovim15');
     socket2.on('data', (data) =>
         # console.log data.toString()
         # console.log data
