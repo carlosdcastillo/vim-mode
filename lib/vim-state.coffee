@@ -746,6 +746,8 @@ class VimState
     params.manager = this;
     params.id = 0;
     @sockets = []
+    @area = new HighlightedAreaView(@editorView)
+    @area.attach()
 
     @setupCommandMode()
     @registerInsertIntercept()
@@ -786,15 +788,16 @@ class VimState
     socket.on('data', (data) =>
         {value:q,trailing} = decode_pub(to_uint8array(data))
         {value:qq,trailing} = decode_pub(str2ab(q[3][1]))
+        console.log qq
     )
     msg = encode_pub([0,1,0,[]])
     socket.write(msg)
     @sockets.push(socket)
     @neovim_send_message([0,1,39,[]])
-    @neovim_send_message([0,1,23,['e! '+@editor.getUri()]])
-    @neovim_send_message([0,1,23,['set scrolloff=2']])
-    @neovim_send_message([0,1,23,['set nu']])
-    @neovim_send_message([0,1,23,['set nowrap']])
+    # @neovim_send_message([0,1,23,['e! '+@editor.getUri()]])
+    # @neovim_send_message([0,1,23,['set scrolloff=2']])
+    # @neovim_send_message([0,1,23,['set nu']])
+    # @neovim_send_message([0,1,23,['set nowrap']])
 
     # @neovim_send_message([0,1,22,['jjj']])
     # @neovim_send_message([0,1,22,['l']])
@@ -808,152 +811,168 @@ class VimState
   destroy_sockets:(editor) =>
     if @subscriptions['redraw:cursor'] or @subscriptions['redraw:update_line']
       if editor.getUri() != @editor.getUri()
-        for item in @sockets
-          item.end()
-          item.destroy()
-        @sockets = []
         @subscriptions['redraw:cursor'] = false
         @subscriptions['redraw:update_line'] = false
         @subscriptions['redraw:layout'] = false
         @subscriptions['redraw:foreground_color'] = false
         @subscriptions['redraw:background_color'] = false
+        for item in @sockets
+          item.end()
+          item.destroy()
+        @sockets = []
 
 
   activePaneChanged: =>
+    @neovim_send_message([0,1,23,['e! '+atom.workspaceView.getActiveView().getEditor().getUri()]],(q) => @afterOpen())
+    @editorView.on 'editor:min-width-changed', @editorSizeChanged
 
-    @neovim_send_message([0,1,23,['e! '+atom.workspaceView.getActiveView().getEditor().getUri()]])
+  afterOpen: =>
+    console.log 'afterOpen'
+
     @neovim_send_message([0,1,23,['set scrolloff=2']])
-    @neovim_send_message([0,1,23,['set nu']])
     @neovim_send_message([0,1,23,['set nowrap']])
+    @neovim_send_message([0,1,23,['set nu']])
 
-    if not @subscriptions['redraw:background_color']
-      @neovim_subscribe('redraw:background_color', (q) =>
-        # console.log "r:bgc:"
-        # console.log q
-      )
-    if not @subscriptions['redraw:foreground_color']
-      @neovim_subscribe('redraw:foreground_color', (q) =>
-        # console.log "r:fgc:"
-        # console.log q
-      )
-    if not @subscriptions['redraw:layout']
-      @neovim_subscribe('redraw:layout', (q) =>
-        # console.log "r:lo:"
-        # console.log q
-      )
+    @neovim_send_message([0,1,23,['redraw!']], (dummy) =>
 
-    if not @subscriptions['redraw:cursor']
-      @neovim_subscribe('redraw:cursor', (q) =>
-        try
+      if not @subscriptions['redraw:background_color']
+        @neovim_subscribe('redraw:background_color', (q) =>
+          # console.log q
+        )
+      if not @subscriptions['redraw:foreground_color']
+        @neovim_subscribe('redraw:foreground_color', (q) =>
+          # console.log q
+        )
+      if not @subscriptions['redraw:layout']
+        @neovim_subscribe('redraw:layout', (q) =>
+          # console.log q
+        )
 
-          @editor.setCursorBufferPosition(new Point(parseInt(q.row),parseInt(q.col)),{autoscroll:false})
-          allempty = true
-          for rng in @range_list
-            if not rng.isEmpty()
-              allempty = false
-              break
-          if not allempty
-            final_range_list = []
-            for item in @range_list
-              s = item.start.toArray()
-              if s[0] == parseInt(q.row)
-                radd = new Range([parseInt(q.row), parseInt(q.col)],[parseInt(q.row), parseInt(q.col)+1])
-                final_range_list.push(item.union(radd))
+      if not @subscriptions['redraw:cursor']
+        @neovim_send_message([0,1,25,["expand('%:p')"]], (q) =>
+          console.log q
+          if q == @editor.getUri()
+            @ns_redraw_cursor()
+        )
+
+      if not @subscriptions['redraw:update_line']
+        @neovim_send_message([0,1,25,["expand('%:p')"]], (q) =>
+          console.log q
+          if q == @editor.getUri()
+            @ns_redraw_update_line()
+        )
+    )
+
+  ns_redraw_cursor: =>
+    @neovim_subscribe('redraw:cursor', (q) =>
+      try
+        @editor.setCursorBufferPosition(new Point(parseInt(q.row),parseInt(q.col)),{autoscroll:false})
+        allempty = true
+        for rng in @range_list
+          if not rng.isEmpty()
+            allempty = false
+            break
+        if not allempty
+          final_range_list = []
+          for item in @range_list
+            s = item.start.toArray()
+            if s[0] == parseInt(q.row)
+              radd = new Range([parseInt(q.row), parseInt(q.col)],[parseInt(q.row), parseInt(q.col)+1])
+              final_range_list.push(item.union(radd))
+            else
+              final_range_list.push(item)
+          @editor.setSelectedBufferRanges(final_range_list)
+
+        lineHeightInPixels = 19;
+        @editor.setScrollTop((@line0-1)*lineHeightInPixels);
+
+      catch err
+        console.log 'redraw cursor error:'+err
+
+    )
+
+
+  ns_redraw_update_line: =>
+    @neovim_subscribe('redraw:update_line', (q) =>
+      try
+        qline = q['line']
+        lineno = parseInt(qline[0]['content'])
+        linelen = qline[0]['content'].length
+        qrow = parseInt(q['row'])
+        @line0 = lineno - qrow
+
+        if qline.length > 1
+          qlen = qline[1]['content'].length
+          linerange = new Range(new Point(qrow+@line0-1,0),new Point(qrow+@line0-1,qlen))
+          currenttext = @editor.getTextInBufferRange(linerange)
+          if currenttext isnt qline[1]['content'] and @subscriptions['redraw:update_line']
+            @editor.setTextInBufferRange(linerange,qline[1]['content'])
+            # console.log 'setting text in:'+qrow
+            # console.log currenttext
+            # console.log currenttext.length
+            # console.log qline[1]['content']
+            # console.log  qline[1]['content'].length
+
+        rng = (new Range(new Point(0,0), new Point(0,0)))
+
+        highlight_case = 0
+        if 'attributes' of q
+          r = q['attributes']
+          # console.log r
+          for key of r
+            if key.indexOf('bg:#ff') == 0      #hlsearch todo more robust detection
+
+              highlight_case = 1
+              s = r[key]
+              s0 = parseInt(s[0][0])
+              if s[0].length > 1
+                s1 = parseInt(s[0][1])
+                rng = new Range(new Point(qrow+@line0-1,s0-linelen), new Point(qrow+@line0-1,s1-linelen))
               else
-                final_range_list.push(item)
-            @editor.setSelectedBufferRanges(final_range_list)
+                s0 = parseInt(s[0])
+                rng = new Range(new Point(qrow+@line0-1,s0-linelen), new Point(qrow+@line0-1,s0-linelen+1))
 
-          lineHeightInPixels = 19;
-          @editor.setScrollTop((@line0-1)*lineHeightInPixels);
+              break
 
-        catch err
-          console.log 'redraw cursor error:'+err
-
-      )
-
-    if not @subscriptions['redraw:update_line']
-
-      @neovim_subscribe('redraw:update_line', (q) =>
-        try
-          qline = q['line']
-          lineno = parseInt(qline[0]['content'])
-          linelen = qline[0]['content'].length
-          qrow = parseInt(q['row'])
-          @line0 = lineno - qrow
-
-          if qline.length > 1
-            qlen = qline[1]['content'].length
-            linerange = new Range(new Point(qrow+@line0-1,0),new Point(qrow+@line0-1,qlen))
-            currenttext = @editor.getTextInBufferRange(linerange)
-            if currenttext isnt qline[1]['content']
-              @editor.setTextInBufferRange(linerange,qline[1]['content'])
-              # console.log 'setting text in:'+qrow
-              # console.log currenttext
-              # console.log currenttext.length
-              # console.log qline[1]['content']
-              # console.log  qline[1]['content'].length
-
-          rng = (new Range(new Point(0,0), new Point(0,0)))
-
-          highlight_case = 0
-          if 'attributes' of q
-            r = q['attributes']
-            # console.log r
-            for key of r
-              if key.indexOf('bg:#ff') == 0      #hlsearch todo more robust detection
-
-                highlight_case = 1
-                s = r[key]
-                s0 = parseInt(s[0][0])
-                if s[0].length > 1
-                  s1 = parseInt(s[0][1])
-                  rng = new Range(new Point(qrow+@line0-1,s0-linelen), new Point(qrow+@line0-1,s1-linelen))
-                else
-                  s0 = parseInt(s[0])
-                  rng = new Range(new Point(qrow+@line0-1,s0-linelen), new Point(qrow+@line0-1,s0-linelen+1))
-
-                break
-
-              if key.indexOf('bg') == 0        #visual selection -> maps to Atom selection
-                highlight_case = 2
-                s = r[key]
-                s0 = parseInt(s[0][0])
-                if s[0].length > 1
-                  s1 = parseInt(s[0][1])
-                  rng = new Range(new Point(qrow+@line0-1,s0-linelen), new Point(qrow+@line0-1,s1-linelen))
-                else
-                  s0 = parseInt(s[0])
-                  rng = new Range(new Point(qrow+@line0-1,s0-linelen), new Point(qrow+@line0-1,s0-linelen+1))
-                break
+            if key.indexOf('bg') == 0        #visual selection -> maps to Atom selection
+              highlight_case = 2
+              s = r[key]
+              s0 = parseInt(s[0][0])
+              if s[0].length > 1
+                s1 = parseInt(s[0][1])
+                rng = new Range(new Point(qrow+@line0-1,s0-linelen), new Point(qrow+@line0-1,s1-linelen))
+              else
+                s0 = parseInt(s[0])
+                rng = new Range(new Point(qrow+@line0-1,s0-linelen), new Point(qrow+@line0-1,s0-linelen+1))
+              break
 
 
-          index = @range_line_list.indexOf(qrow+@line0)
-          if index isnt -1
-            @range_line_list.splice(index,1)
-            @range_list.splice(index,1)
+        index = @range_line_list.indexOf(qrow+@line0)
+        if index isnt -1
+          @range_line_list.splice(index,1)
+          @range_list.splice(index,1)
 
-          if not rng.isEmpty() and highlight_case == 2
-            @range_line_list.push qrow+@line0
-            @range_list.push rng
+        if not rng.isEmpty() and highlight_case == 2
+          @range_line_list.push qrow+@line0
+          @range_list.push rng
 
+        index = @editorView.vimState.area.indexOf(qrow+@line0-1)
+
+        while index isnt -1
+          @editorView.vimState.area.remove(index)
           index = @editorView.vimState.area.indexOf(qrow+@line0-1)
 
-          while index isnt -1
-            @editorView.vimState.area.remove(index)
-            index = @editorView.vimState.area.indexOf(qrow+@line0-1)
+        if not rng.isEmpty() and highlight_case == 1
+          marker = new MarkerView(rng,@editorView,this)
+          @editorView.vimState.area.appendMarker(marker)
 
-          if not rng.isEmpty() and highlight_case == 1
-            marker = new MarkerView(rng,@editorView,this)
-            @editorView.vimState.area.appendMarker(marker)
+        if @range_list.length > 0
+          @editor.setSelectedBufferRanges(@range_list,{})
+      catch err
+        console.log 'el error:'+err
 
-          if @range_list.length > 0
-            @editor.setSelectedBufferRanges(@range_list,{})
-        catch err
-          console.log 'el error:'+err
-
-        # console.log(@line_list)
-      )
-    @editorView.on 'editor:min-width-changed', @editorSizeChanged
+      # console.log(@line_list)
+    )
 
 
   editorSizeChanged: =>
@@ -974,7 +993,7 @@ class VimState
             {value:q,trailing} = decode_pub(to_uint8array(collected.slice(0,i)))
             if trailing == 0
               collected = collected.slice(i,collected.length)
-              if q[1] == event
+              if q[1] == event and @subscriptions[q[1]]
                 f(q[2])
               i = 1
             else
@@ -1001,16 +1020,16 @@ class VimState
         # console.log data
         # console.log to_uint8array(data)
         {value:q, trailing:t} = decode_pub(to_uint8array(data))
+        if t isnt 0
+          console.log 'not reliable'
         if f
-          f(q)
+          f(q[3])
         socket2.destroy()
         # console.log q
     )
     msg2 = encode_pub(message)
     socket2.write(msg2)
 
-    @area = new HighlightedAreaView(@editorView)
-    @area.attach()
 
   # Private: Creates a handle to block insertion while in command mode.
   #
