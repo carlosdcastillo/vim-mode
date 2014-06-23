@@ -14,6 +14,7 @@ Marker = require 'atom'
 net = require 'net'
 map = require './mapped'
 Buffer = require("buffer").Buffer
+MarkerView = require './motions/marker-view'
 
 bops_readUInt8 = (target, at) ->
   target[at]
@@ -881,24 +882,40 @@ class VimState
           @line0 = lineno - qrow
 
           if qline.length > 1
-            console.log qline[1]
             qlen = qline[1]['content'].length
             linerange = new Range(new Point(qrow+@line0-1,0),new Point(qrow+@line0-1,qlen))
             currenttext = @editor.getTextInBufferRange(linerange)
             if currenttext isnt qline[1]['content']
               @editor.setTextInBufferRange(linerange,qline[1]['content'])
-              console.log 'setting text in:'+qrow
-              console.log currenttext
-              console.log currenttext.length
-              console.log qline[1]['content']
-              console.log  qline[1]['content'].length
+              # console.log 'setting text in:'+qrow
+              # console.log currenttext
+              # console.log currenttext.length
+              # console.log qline[1]['content']
+              # console.log  qline[1]['content'].length
 
           rng = (new Range(new Point(0,0), new Point(0,0)))
 
+          highlight_case = 0
           if 'attributes' of q
             r = q['attributes']
+            # console.log r
             for key of r
-              if key.indexOf('bg') == 0
+              if key.indexOf('bg:#ff') == 0      #hlsearch todo more robust detection
+
+                highlight_case = 1
+                s = r[key]
+                s0 = parseInt(s[0][0])
+                if s[0].length > 1
+                  s1 = parseInt(s[0][1])
+                  rng = new Range(new Point(qrow+@line0-1,s0-linelen), new Point(qrow+@line0-1,s1-linelen))
+                else
+                  s0 = parseInt(s[0])
+                  rng = new Range(new Point(qrow+@line0-1,s0-linelen), new Point(qrow+@line0-1,s0-linelen+1))
+
+                break
+
+              if key.indexOf('bg') == 0        #visual selection -> maps to Atom selection
+                highlight_case = 2
                 s = r[key]
                 s0 = parseInt(s[0][0])
                 if s[0].length > 1
@@ -908,13 +925,27 @@ class VimState
                   s0 = parseInt(s[0])
                   rng = new Range(new Point(qrow+@line0-1,s0-linelen), new Point(qrow+@line0-1,s0-linelen+1))
                 break
+
+
           index = @range_line_list.indexOf(qrow+@line0)
           if index isnt -1
             @range_line_list.splice(index,1)
             @range_list.splice(index,1)
-          if not rng.isEmpty()
+
+          if not rng.isEmpty() and highlight_case == 2
             @range_line_list.push qrow+@line0
             @range_list.push rng
+
+          index = @editorView.vimState.area.indexOf(qrow+@line0-1)
+
+          while index isnt -1
+            @editorView.vimState.area.remove(index)
+            index = @editorView.vimState.area.indexOf(qrow+@line0-1)
+
+          if not rng.isEmpty() and highlight_case == 1
+            marker = new MarkerView(rng,@editorView,this)
+            @editorView.vimState.area.appendMarker(marker)
+
           if @range_list.length > 0
             @editor.setSelectedBufferRanges(@range_list,{})
         catch err

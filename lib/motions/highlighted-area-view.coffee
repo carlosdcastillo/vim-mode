@@ -9,6 +9,7 @@ class HighlightedAreaView extends View
 
   initialize: (editorView) ->
     @views = []
+    @views_line_number = []
     @editorView = editorView
 
   attach: =>
@@ -27,17 +28,35 @@ class HighlightedAreaView extends View
     @remove()
     @detach()
 
+  indexOf: (start) ->
+    @views_line_number.indexOf(start)
+
+  remove: (index) ->
+    # return unless @views?
+    # return if @views.length is 0
+    # for view in @views
+    #   view.element.remove()
+    #   view = null
+    # @views = []
+
+    @views[index].element.remove()
+    @views[index] = null
+    @views.splice(index,1)
+    @views_line_number.splice(index,1)
+
   appendMarker: (marker) ->
     @append(marker.element)
     @views.push(marker)
+    console.log 'marker.range.start'+marker.range.start.row
+    @views_line_number.push(marker.range.start.row)
 
   # handleSelection: =>
   #   @removeMarkers()
   #
   handleMove: =>
-    if @views.length>0
-      searcherReference = @views[0].searcher
-      searcherReference.markAll()
+    # if @views.length>0
+      # searcherReference = @views[0].searcher
+      # searcherReference.markAll()
 
   removeMarkers: =>
     return unless @views?
