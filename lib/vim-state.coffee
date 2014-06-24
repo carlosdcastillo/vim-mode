@@ -850,14 +850,13 @@ class VimState
 
       if not @subscriptions['redraw:cursor']
         @neovim_send_message([0,1,25,["expand('%:p')"]], (q) =>
-          console.log q
           if q == @editor.getUri()
             @ns_redraw_cursor()
         )
 
       if not @subscriptions['redraw:update_line']
         @neovim_send_message([0,1,25,["expand('%:p')"]], (q) =>
-          console.log q
+          #console.log q
           if q == @editor.getUri()
             @ns_redraw_update_line()
         )
@@ -906,7 +905,10 @@ class VimState
           linerange = new Range(new Point(qrow+@line0-1,0),new Point(qrow+@line0-1,qlen))
           currenttext = @editor.getTextInBufferRange(linerange)
           if currenttext isnt qline[1]['content'] and @subscriptions['redraw:update_line']
-            @editor.setTextInBufferRange(linerange,qline[1]['content'])
+            @neovim_send_message([0,1,25,["expand('%:p')"]], (filename) =>
+              if filename == @editor.getUri()
+                @editor.setTextInBufferRange(linerange,qline[1]['content'])
+            )
             # console.log 'setting text in:'+qrow
             # console.log currenttext
             # console.log currenttext.length
@@ -1013,22 +1015,25 @@ class VimState
 
 
   neovim_send_message:(message,f = undefined) ->
-    socket2 = new net.Socket()
-    socket2.connect('/Users/carlos/tmp/neovim15');
-    socket2.on('data', (data) =>
-        # console.log data.toString()
-        # console.log data
-        # console.log to_uint8array(data)
-        {value:q, trailing:t} = decode_pub(to_uint8array(data))
-        if t isnt 0
-          console.log 'not reliable'
-        if f
-          f(q[3])
-        socket2.destroy()
-        # console.log q
-    )
-    msg2 = encode_pub(message)
-    socket2.write(msg2)
+    try
+      socket2 = new net.Socket()
+      socket2.connect('/Users/carlos/tmp/neovim15');
+      socket2.on('data', (data) =>
+          # console.log data.toString()
+          # console.log data
+          # console.log to_uint8array(data)
+          {value:q, trailing:t} = decode_pub(to_uint8array(data))
+          if t isnt 0
+            console.log 'not reliable'
+          if f
+            f(q[3])
+          socket2.destroy()
+          # console.log q
+      )
+      msg2 = encode_pub(message)
+      socket2.write(msg2)
+    catch err
+      console.log 'error in neovim_send_message'
 
 
   # Private: Creates a handle to block insertion while in command mode.
