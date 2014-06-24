@@ -835,7 +835,9 @@ class VimState
     subscription_callback = {}
 
     @neovim_send_message([0,1,23,['redraw!']], (dummy) =>
-      @neovim_subscribe(['redraw:foreground_color','redraw:background_color','redraw:layout','redraw:cursor','redraw:update_line'])
+      @neovim_subscribe(['redraw:foreground_color','redraw:background_color',
+          'redraw:layout','redraw:cursor','redraw:update_line','redraw:insert_line',
+          'redraw:delete_line'])
     )
 
   ns_redraw_background_color:(q) =>
@@ -881,13 +883,19 @@ class VimState
 
         if qline.length > 1
           qlen = qline[1]['content'].length
-          linerange = new Range(new Point(qrow+@line0-1,0),new Point(qrow+@line0-1,qlen))
-          currenttext = @editor.getTextInBufferRange(linerange)
-          if currenttext isnt qline[1]['content'] and @subscriptions['redraw:update_line']
-            @neovim_send_message([0,1,25,["expand('%:p')"]], (filename) =>
-              if filename == @editor.getUri()
-                @editor.setTextInBufferRange(linerange,qline[1]['content'])
-            )
+          qlinecontents = qline[1]['content']
+        else
+          qlen = 0
+          qlinecontents = ''
+
+        linerange = new Range(new Point(qrow+@line0-1,0),new Point(qrow+@line0-1,1024))
+        currenttext = @editor.getTextInBufferRange(linerange)
+
+        if currenttext isnt qlinecontents and @subscriptions['redraw:update_line']
+          @neovim_send_message([0,1,25,["expand('%:p')"]], (filename) =>
+            if filename == @editor.getUri()
+              @editor.setTextInBufferRange(linerange,qlinecontents)
+          )
             # console.log 'setting text in:'+qrow
             # console.log currenttext
             # console.log currenttext.length
@@ -952,7 +960,13 @@ class VimState
       catch err
         console.log 'el error:'+err
 
+  ns_redraw_insert_line:(q) =>
+    console.log "redraw insert line:"
+    console.log q
 
+  ns_redraw_delete_line:(q) =>
+    console.log "redraw delete line:"
+    console.log q
 
   editorSizeChanged: =>
     @height = @editorView.getPageRows()
@@ -984,6 +998,10 @@ class VimState
                   @ns_redraw_cursor(q[2])
                 if q[1] is 'redraw:update_line'
                   @ns_redraw_update_line(q[2])
+                if q[1] is 'redraw:insert_line'
+                  @ns_redraw_insert_line(q[2])
+                if q[1] is 'redraw:delete_line'
+                  @ns_redraw_delete_line(q[2])
               i = 1
             else
               if trailing < 0
