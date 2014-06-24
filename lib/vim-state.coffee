@@ -745,9 +745,9 @@ class VimState
     params = {}
     params.manager = this;
     params.id = 0;
-    @sockets = []
     @area = new HighlightedAreaView(@editorView)
     @area.attach()
+    @socket_subs = null
 
     @setupCommandMode()
     @registerInsertIntercept()
@@ -789,10 +789,11 @@ class VimState
         {value:q,trailing} = decode_pub(to_uint8array(data))
         {value:qq,trailing} = decode_pub(str2ab(q[3][1]))
         console.log qq
+        socket.end()
+        socket.destroy()
     )
     msg = encode_pub([0,1,0,[]])
     socket.write(msg)
-    @sockets.push(socket)
     @neovim_send_message([0,1,39,[]])
     # @neovim_send_message([0,1,23,['e! '+@editor.getUri()]])
     # @neovim_send_message([0,1,23,['set scrolloff=2']])
@@ -816,10 +817,9 @@ class VimState
         @subscriptions['redraw:layout'] = false
         @subscriptions['redraw:foreground_color'] = false
         @subscriptions['redraw:background_color'] = false
-        for item in @sockets
-          item.end()
-          item.destroy()
-        @sockets = []
+        @socket_subs.end()
+        @socket_subs.destroy()
+        @socket_subs = null
 
 
   activePaneChanged: =>
@@ -827,43 +827,24 @@ class VimState
     @editorView.on 'editor:min-width-changed', @editorSizeChanged
 
   afterOpen: =>
-    console.log 'afterOpen'
 
     @neovim_send_message([0,1,23,['set scrolloff=2']])
     @neovim_send_message([0,1,23,['set nowrap']])
     @neovim_send_message([0,1,23,['set nu']])
 
+    subscription_callback = {}
+
     @neovim_send_message([0,1,23,['redraw!']], (dummy) =>
-
-      if not @subscriptions['redraw:background_color']
-        @neovim_subscribe('redraw:background_color', (q) =>
-          # console.log q
-        )
-      if not @subscriptions['redraw:foreground_color']
-        @neovim_subscribe('redraw:foreground_color', (q) =>
-          # console.log q
-        )
-      if not @subscriptions['redraw:layout']
-        @neovim_subscribe('redraw:layout', (q) =>
-          # console.log q
-        )
-
-      if not @subscriptions['redraw:cursor']
-        @neovim_send_message([0,1,25,["expand('%:p')"]], (q) =>
-          if q == @editor.getUri()
-            @ns_redraw_cursor()
-        )
-
-      if not @subscriptions['redraw:update_line']
-        @neovim_send_message([0,1,25,["expand('%:p')"]], (q) =>
-          #console.log q
-          if q == @editor.getUri()
-            @ns_redraw_update_line()
-        )
+      @neovim_subscribe(['redraw:foreground_color','redraw:background_color','redraw:layout','redraw:cursor','redraw:update_line'])
     )
 
-  ns_redraw_cursor: =>
-    @neovim_subscribe('redraw:cursor', (q) =>
+  ns_redraw_background_color:(q) =>
+
+  ns_redraw_foreground_color:(q) =>
+
+  ns_redraw_layout:(q) =>
+
+  ns_redraw_cursor:(q) =>
       try
         @editor.setCursorBufferPosition(new Point(parseInt(q.row),parseInt(q.col)),{autoscroll:false})
         allempty = true
@@ -888,11 +869,9 @@ class VimState
       catch err
         console.log 'redraw cursor error:'+err
 
-    )
 
 
-  ns_redraw_update_line: =>
-    @neovim_subscribe('redraw:update_line', (q) =>
+  ns_redraw_update_line:(q) =>
       try
         qline = q['line']
         lineno = parseInt(qline[0]['content'])
@@ -973,8 +952,6 @@ class VimState
       catch err
         console.log 'el error:'+err
 
-      # console.log(@line_list)
-    )
 
 
   editorSizeChanged: =>
@@ -983,11 +960,12 @@ class VimState
     @neovim_send_message([0,1,23,['set lines='+@height]])
 
 
-  neovim_subscribe:(event,f) ->
-    socket2 = new net.Socket()
-    socket2.connect('/Users/carlos/tmp/neovim15');
+  neovim_subscribe:(events) =>
+    if @socket_subs == null
+      @socket_subs = new net.Socket()
+      @socket_subs.connect('/Users/carlos/tmp/neovim15');
     collected = new Buffer(0)
-    socket2.on('data', (data) =>
+    @socket_subs.on('data', (data) =>
         collected = Buffer.concat([collected, data]);
         i = 1
         while i <= collected.length
@@ -995,8 +973,17 @@ class VimState
             {value:q,trailing} = decode_pub(to_uint8array(collected.slice(0,i)))
             if trailing == 0
               collected = collected.slice(i,collected.length)
-              if q[1] == event and @subscriptions[q[1]]
-                f(q[2])
+              if q[2] and q[1] in events and @subscriptions[q[1]]
+                if q[1] is 'redraw:background_color'
+                  @ns_redraw_background_color(q[2])
+                if q[1] is 'redraw:background_color'
+                  @ns_redraw_foreground_color(q[2])
+                if q[1] is 'redraw:layout'
+                  @ns_redraw_layout(q[2])
+                if q[1] is 'redraw:cursor'
+                  @ns_redraw_cursor(q[2])
+                if q[1] is 'redraw:update_line'
+                  @ns_redraw_update_line(q[2])
               i = 1
             else
               if trailing < 0
@@ -1008,10 +995,10 @@ class VimState
 
 
     )
-    msg2 = encode_pub([0,1,48,[event]])
-    socket2.write(msg2)
-    @sockets.push(socket2)
-    @subscriptions[event] = true
+    for event in events
+      msg2 = encode_pub([0,1,48,[event]])
+      @socket_subs.write(msg2)
+      @subscriptions[event] = true
 
 
   neovim_send_message:(message,f = undefined) ->
