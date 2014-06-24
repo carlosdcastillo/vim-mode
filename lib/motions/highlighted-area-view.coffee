@@ -47,7 +47,6 @@ class HighlightedAreaView extends View
   appendMarker: (marker) ->
     @append(marker.element)
     @views.push(marker)
-    console.log 'marker.range.start'+marker.range.start.row
     @views_line_number.push(marker.range.start.row)
 
   # handleSelection: =>
