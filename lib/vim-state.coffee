@@ -1020,6 +1020,9 @@ class VimState
     try
       socket2 = new net.Socket()
       socket2.connect('/Users/carlos/tmp/neovim15');
+      socket2.on('error', (error) =>
+        console.log 'error communicating'
+      )
       socket2.on('data', (data) =>
           # console.log data.toString()
           # console.log data
@@ -1030,7 +1033,6 @@ class VimState
           if f
             f(q[3])
           socket2.destroy()
-          # console.log q
       )
       msg2 = encode_pub(message)
       socket2.write(msg2)
