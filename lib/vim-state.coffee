@@ -871,8 +871,6 @@ class VimState
       catch err
         console.log 'redraw cursor error:'+err
 
-
-
   ns_redraw_update_line:(q) =>
       try
         qline = q['line']
@@ -961,15 +959,15 @@ class VimState
         console.log 'el error:'+err
 
   ns_redraw_insert_line:(q) =>
-    console.log "redraw insert line:"
-    console.log q
+    #console.log "redraw insert line:"
+    #console.log q
 
   ns_redraw_delete_line:(q) =>
-    console.log "redraw delete line:"
-    console.log q
+    #console.log "redraw delete line:"
+    #console.log q
 
   editorSizeChanged: =>
-    @height = @editorView.getPageRows()
+    @height = Math.max(@editorView.getPageRows(),20)
     @line0 = 1
     @neovim_send_message([0,1,23,['set lines='+@height]])
 
@@ -1010,9 +1008,8 @@ class VimState
                 i = i + trailing
           catch err
             i = i + 1
-
-
     )
+
     for event in events
       msg2 = encode_pub([0,1,48,[event]])
       @socket_subs.write(msg2)
