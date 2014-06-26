@@ -748,6 +748,7 @@ class VimState
     @area = new HighlightedAreaView(@editorView)
     @area.attach()
     @socket_subs = null
+    @linelen = 5
 
     @setupCommandMode()
     @registerInsertIntercept()
@@ -848,7 +849,10 @@ class VimState
 
   ns_redraw_cursor:(q) =>
       try
-        @editor.setCursorBufferPosition(new Point(parseInt(q.row),parseInt(q.col)),{autoscroll:false})
+        #console.log 'redraw cursor q:'
+        #console.log q
+        #console.log @linelen
+        @editor.setCursorBufferPosition(new Point(parseInt(q.lnum-1),parseInt(q.col)-@linelen),{autoscroll:false})
         allempty = true
         for rng in @range_list
           if not rng.isEmpty()
@@ -873,9 +877,14 @@ class VimState
 
   ns_redraw_update_line:(q) =>
       try
+        console.log 'redraw line q'
+        console.log q
         qline = q['line']
         lineno = parseInt(qline[0]['content'])
-        linelen = qline[0]['content'].length
+        if qline.length > 1
+          @linelen = qline[0]['content'].length - qline[1]['content'].length
+        else
+          @linelen = qline[0]['content'].length
         qrow = parseInt(q['row'])
         @line0 = lineno - qrow
 
@@ -914,10 +923,10 @@ class VimState
               s0 = parseInt(s[0][0])
               if s[0].length > 1
                 s1 = parseInt(s[0][1])
-                rng = new Range(new Point(qrow+@line0-1,s0-linelen), new Point(qrow+@line0-1,s1-linelen))
+                rng = new Range(new Point(qrow+@line0-1,s0-@linelen), new Point(qrow+@line0-1,s1-@linelen))
               else
                 s0 = parseInt(s[0])
-                rng = new Range(new Point(qrow+@line0-1,s0-linelen), new Point(qrow+@line0-1,s0-linelen+1))
+                rng = new Range(new Point(qrow+@line0-1,s0-@linelen), new Point(qrow+@line0-1,s0-@linelen+1))
 
               break
 
@@ -927,10 +936,10 @@ class VimState
               s0 = parseInt(s[0][0])
               if s[0].length > 1
                 s1 = parseInt(s[0][1])
-                rng = new Range(new Point(qrow+@line0-1,s0-linelen), new Point(qrow+@line0-1,s1-linelen))
+                rng = new Range(new Point(qrow+@line0-1,s0-@linelen), new Point(qrow+@line0-1,s1-@linelen))
               else
                 s0 = parseInt(s[0])
-                rng = new Range(new Point(qrow+@line0-1,s0-linelen), new Point(qrow+@line0-1,s0-linelen+1))
+                rng = new Range(new Point(qrow+@line0-1,s0-@linelen), new Point(qrow+@line0-1,s0-@linelen+1))
               break
 
 
@@ -977,6 +986,9 @@ class VimState
       @socket_subs = new net.Socket()
       @socket_subs.connect('/Users/carlos/tmp/neovim15');
     collected = new Buffer(0)
+    @socket_subs.on('error', (error) =>
+      console.log 'error communicating (subscribe)'
+    )
     @socket_subs.on('data', (data) =>
         collected = Buffer.concat([collected, data]);
         i = 1
