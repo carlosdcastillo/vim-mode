@@ -838,6 +838,7 @@ class VimState
     @neovim_send_message([0,1,23,['set nowrap']])
     @neovim_send_message([0,1,23,['set nu']])
     @neovim_send_message([0,1,23,['set autochdir']])
+    @neovim_send_message([0,1,23,['set hlsearch']])
 
     subscription_callback = {}
 
