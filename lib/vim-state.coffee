@@ -782,6 +782,8 @@ class VimState
     @subscriptions['redraw:layout'] = false;
     @subscriptions['redraw:foreground_color'] = false
     @subscriptions['redraw:background_color'] = false
+    @subscriptions['redraw:start'] = false
+    @subscriptions['redraw:end'] = false
 
     socket = new net.Socket()
     socket.connect('/Users/carlos/tmp/neovim15');
@@ -796,10 +798,6 @@ class VimState
     msg = encode_pub([0,1,0,[]])
     socket.write(msg)
     @neovim_send_message([0,1,39,[]])
-    # @neovim_send_message([0,1,23,['e! '+@editor.getUri()]])
-    # @neovim_send_message([0,1,23,['set scrolloff=2']])
-    # @neovim_send_message([0,1,23,['set nu']])
-    # @neovim_send_message([0,1,23,['set nowrap']])
 
     # @neovim_send_message([0,1,22,['jjj']])
     # @neovim_send_message([0,1,22,['l']])
@@ -818,6 +816,9 @@ class VimState
         @subscriptions['redraw:layout'] = false
         @subscriptions['redraw:foreground_color'] = false
         @subscriptions['redraw:background_color'] = false
+        @subscriptions['redraw:start'] = false
+        @subscriptions['redraw:end'] = false
+
         @socket_subs.end()
         @socket_subs.destroy()
         @socket_subs = null
@@ -838,7 +839,7 @@ class VimState
     @neovim_send_message([0,1,23,['redraw!']], (dummy) =>
       @neovim_subscribe(['redraw:foreground_color','redraw:background_color',
           'redraw:layout','redraw:cursor','redraw:update_line','redraw:insert_line',
-          'redraw:delete_line'])
+          'redraw:delete_line','redraw:start','redraw:end'])
     )
 
   ns_redraw_background_color:(q) =>
@@ -846,6 +847,8 @@ class VimState
   ns_redraw_foreground_color:(q) =>
 
   ns_redraw_layout:(q) =>
+    console.log 'redraw layout'
+    console.log q
 
   ns_redraw_cursor:(q) =>
       try
@@ -877,8 +880,8 @@ class VimState
 
   ns_redraw_update_line:(q) =>
       try
-        console.log 'redraw line q'
-        console.log q
+        #console.log 'redraw line q'
+        #console.log q
         qline = q['line']
         lineno = parseInt(qline[0]['content'])
         if qline.length > 1
@@ -975,6 +978,14 @@ class VimState
     #console.log "redraw delete line:"
     #console.log q
 
+  ns_redraw_start:(q) =>
+    console.log "redraw start:"
+    console.log q
+  ns_redraw_end:(q) =>
+    console.log "redraw end:"
+    console.log q
+
+    
   editorSizeChanged: =>
     @height = Math.max(@editorView.getPageRows(),20)
     @line0 = 1
@@ -1012,6 +1023,11 @@ class VimState
                   @ns_redraw_insert_line(q[2])
                 if q[1] is 'redraw:delete_line'
                   @ns_redraw_delete_line(q[2])
+                if q[1] is 'redraw:start'
+                  @ns_redraw_start(q[2])
+                if q[1] is 'redraw:end'
+                  @ns_redraw_end(q[2])
+                
               i = 1
             else
               if trailing < 0
