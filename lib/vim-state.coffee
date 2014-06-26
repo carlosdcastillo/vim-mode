@@ -784,6 +784,8 @@ class VimState
     @subscriptions['redraw:background_color'] = false
     @subscriptions['redraw:start'] = false
     @subscriptions['redraw:end'] = false
+    @subscriptions['redraw:win_start'] = false
+    @subscriptions['redraw:win_end'] = false
 
     socket = new net.Socket()
     socket.connect('/Users/carlos/tmp/neovim15');
@@ -818,6 +820,8 @@ class VimState
         @subscriptions['redraw:background_color'] = false
         @subscriptions['redraw:start'] = false
         @subscriptions['redraw:end'] = false
+        @subscriptions['redraw:win_start'] = false
+        @subscriptions['redraw:win_end'] = false
 
         @socket_subs.end()
         @socket_subs.destroy()
@@ -833,13 +837,14 @@ class VimState
     @neovim_send_message([0,1,23,['set scrolloff=2']])
     @neovim_send_message([0,1,23,['set nowrap']])
     @neovim_send_message([0,1,23,['set nu']])
+    @neovim_send_message([0,1,23,['set autochdir']])
 
     subscription_callback = {}
 
     @neovim_send_message([0,1,23,['redraw!']], (dummy) =>
       @neovim_subscribe(['redraw:foreground_color','redraw:background_color',
           'redraw:layout','redraw:cursor','redraw:update_line','redraw:insert_line',
-          'redraw:delete_line','redraw:start','redraw:end'])
+          'redraw:delete_line','redraw:start','redraw:end','redraw:win_start','redraw:win_end'])
     )
 
   ns_redraw_background_color:(q) =>
@@ -984,6 +989,17 @@ class VimState
   ns_redraw_end:(q) =>
     console.log "redraw end:"
     console.log q
+  ns_redraw_win_start:(q) =>
+    console.log "redraw win start:"
+    console.log q
+  ns_redraw_win_end:(q) =>
+    console.log "redraw win end:"
+    console.log q
+
+    @neovim_send_message([0,1,25,["expand('%:p')"]], (filename) =>
+      if filename isnt @editor.getUri()
+        atom.workspace.open(filename)
+    )
 
     
   editorSizeChanged: =>
@@ -1027,6 +1043,10 @@ class VimState
                   @ns_redraw_start(q[2])
                 if q[1] is 'redraw:end'
                   @ns_redraw_end(q[2])
+                if q[1] is 'redraw:win_start'
+                  @ns_redraw_win_start(q[2])
+                if q[1] is 'redraw:win_end'
+                  @ns_redraw_win_end(q[2])
                 
               i = 1
             else
