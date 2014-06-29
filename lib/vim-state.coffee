@@ -1002,7 +1002,23 @@ class VimState
         atom.workspace.open(filename)
     )
 
-    
+    @neovim_send_message([0,1,25,["line('$')"]], (nLines) =>
+      console.log 'nlines:'+nLines
+      console.log 'last row:' + @editor.buffer.getLastRow()
+      if @editor.buffer.getLastRow() < parseInt(nLines)
+        nl = parseInt(nLines) - @editor.buffer.getLastRow()
+        diff = ''
+        for i in [0..nl-1]
+          diff = diff + '\n'
+        @editor.buffer.append(diff, true)
+
+      if @editor.buffer.getLastRow() > parseInt(nLines)
+        for i in [parseInt(nLines)+1..@editor.buffer.getLastRow()-1]
+           @editor.buffer.deleteRow(i)
+
+    )
+
+
   editorSizeChanged: =>
     @height = Math.max(@editorView.getPageRows(),20)
     @line0 = 1
@@ -1048,7 +1064,7 @@ class VimState
                   @ns_redraw_win_start(q[2])
                 if q[1] is 'redraw:win_end'
                   @ns_redraw_win_end(q[2])
-                
+
               i = 1
             else
               if trailing < 0
