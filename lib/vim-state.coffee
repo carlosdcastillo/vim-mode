@@ -1015,7 +1015,6 @@ class VimState
       if @editor.buffer.getLastRow() > parseInt(nLines)
         for i in [parseInt(nLines)+1..@editor.buffer.getLastRow()-1]
            @editor.buffer.deleteRow(i)
-
     )
 
 
