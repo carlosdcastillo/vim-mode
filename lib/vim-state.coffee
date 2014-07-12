@@ -861,6 +861,7 @@ class VimState
         #console.log 'redraw cursor q:'
         #console.log q
         #console.log @linelen
+
         @editor.setCursorBufferPosition(new Point(parseInt(q.lnum-1),parseInt(q.col)-@linelen),{autoscroll:false})
         allempty = true
         for rng in @range_list
@@ -1003,8 +1004,6 @@ class VimState
     )
 
     @neovim_send_message([0,1,25,["line('$')"]], (nLines) =>
-      console.log 'nlines:'+nLines
-      console.log 'last row:' + @editor.buffer.getLastRow()
       if @editor.buffer.getLastRow() < parseInt(nLines)
         nl = parseInt(nLines) - @editor.buffer.getLastRow()
         diff = ''
@@ -1017,6 +1016,11 @@ class VimState
            @editor.buffer.deleteRow(i)
     )
 
+#    @neovim_send_message([0,1,25,["line('w$')"]], (lastLine) =>
+#      @height = Math.max(@editorView.getPageRows(),20)
+#      if (lastLine - @line0) < @height
+#        @neovim_send_message([0,1,23,['set lines='+@height]])
+#    )
 
   editorSizeChanged: =>
     @height = Math.max(@editorView.getPageRows(),20)
