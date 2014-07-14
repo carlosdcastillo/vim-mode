@@ -750,13 +750,15 @@ class VimState
     @socket_subs = null
     @linelen = 5
 
-    @setupCommandMode()
-    @registerInsertIntercept()
-    @registerInsertTransactionResets()
-    if atom.config.get 'vim-mode.startInInsertMode'
-      @activateInsertMode()
-    else
-      @activateCommandMode()
+    @changeModeClass('command-mode')
+
+    #@setupCommandMode()
+    #@registerInsertIntercept()
+    #@registerInsertTransactionResets()
+    #if atom.config.get 'vim-mode.startInInsertMode'
+    #  @activateInsertMode()
+    #else
+    #  @activateCommandMode()
 
 
     atom.workspaceView.on 'focusout', ".editor:not(.mini)", (event) =>
@@ -775,7 +777,6 @@ class VimState
 
     @range_list = []
     @range_line_list = []
-
     @subscriptions = {}
     @subscriptions['redraw:cursor'] = false;
     @subscriptions['redraw:update_line'] = false;
@@ -808,8 +809,37 @@ class VimState
 
     @editorView.on 'editor:min-width-changed', @editorSizeChanged
     atom.workspaceView.on 'pane-container:active-pane-item-changed', @activePaneChanged
-
-
+    @editorView.on "keypress.chalcogen", (e) =>
+          if @editorView.hasClass('is-focused')
+            q =  String.fromCharCode(e.which)
+            console.log "pressed:"+q
+            @neovim_send_message([0,1,22,[q]])
+            false
+          else
+            true
+    @editorView.on "keydown", (e) =>
+          if @editorView.hasClass('is-focused') and not e.altKey
+            translation = @translateCode(e.which, e.shiftKey, e.ctrlKey)
+            if translation != ""
+              @neovim_send_message([0,1,22,[translation]])
+              false
+          else
+            true
+  translateCode: (code, shift, control) ->
+    if control && code>=65 && code<=90
+      String.fromCharCode(code-64)
+    else if code>=8 && code<=10 || code==13 || code==27
+      String.fromCharCode(code)
+    else if code==37
+      String.fromCharCode(27)+'[D'
+    else if code==38
+      String.fromCharCode(27)+'[A'
+    else if code==39
+      String.fromCharCode(27)+'[C'
+    else if code==40
+      String.fromCharCode(27)+'[B'
+    else
+      ""
   destroy_sockets:(editor) =>
     if @subscriptions['redraw:cursor'] or @subscriptions['redraw:update_line']
       if editor.getUri() != @editor.getUri()
@@ -995,8 +1025,8 @@ class VimState
     console.log "redraw win start:"
     console.log q
   ns_redraw_win_end:(q) =>
-    console.log "redraw win end:"
-    console.log q
+    #console.log "redraw win end:"
+    #console.log q
 
     @neovim_send_message([0,1,25,["expand('%:p')"]], (filename) =>
       if filename isnt @editor.getUri()
