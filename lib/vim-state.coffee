@@ -3,7 +3,6 @@ _ = require 'underscore-plus'
 
 Operators = require './operators/index'
 Prefixes = require './prefixes'
-Motions = require './motions/index'
 
 TextObjects = require './text-objects'
 Utils = require './utils'
@@ -14,7 +13,7 @@ Marker = require 'atom'
 net = require 'net'
 map = require './mapped'
 Buffer = require("buffer").Buffer
-MarkerView = require './motions/marker-view'
+MarkerView = require './marker-view'
 
 bops_readUInt8 = (target, at) ->
   target[at]
@@ -728,7 +727,7 @@ str2ab = (str) ->
     i++
   bufView
 
-HighlightedAreaView = require './motions/highlighted-area-view'
+HighlightedAreaView = require './highlighted-area-view'
 
 module.exports =
 class VimState
@@ -1119,7 +1118,7 @@ class VimState
       socket2 = new net.Socket()
       socket2.connect('/Users/carlos/tmp/neovim15');
       socket2.on('error', (error) =>
-        console.log 'error communicating'
+        console.log 'error communicating (send message)'
       )
       socket2.on('data', (data) =>
           # console.log data.toString()
