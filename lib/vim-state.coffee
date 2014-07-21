@@ -1,13 +1,8 @@
 _ = require 'underscore-plus'
 {$} = require 'atom'
 
-Operators = require './operators/index'
-Prefixes = require './prefixes'
 
-TextObjects = require './text-objects'
-Utils = require './utils'
-Panes = require './panes'
-Scroll = require './scroll'
+
 {$$, Point, Range} = require 'atom'
 Marker = require 'atom'
 net = require 'net'

@@ -1,5 +1,7 @@
 {$,$$,EditorView, View, Range} = require 'atom'
+
 _ = require 'underscore-plus'
+
 MarkerView = require './marker-view'
 
 module.exports =
@@ -63,50 +65,5 @@ class HighlightedAreaView extends View
     for view in @views
       view.element.remove()
       view = null
-    @views = []{$,$$,EditorView, View, Range} = require 'atom'
-_ = require 'underscore-plus'
-
-class HighlightedAreaView extends View
-    @div class: 'highlight-selected'
-  initialize: (editorView) ->
-    @views_line_number = []
-
-    @editorView.underlayer.append(this)
-    @subscribe @editorView, "selection:changed", @handleMove
-
-    found = false
-      found = true if editor.id is @editorView.id
-    atom.workspaceView.off 'pane:item-removed', @destroy
-    @remove()
-
-    @views_line_number.indexOf(start)
-  remove: (index) ->
-    # return if @views.length is 0
-    #   view.element.remove()
-    # @views = []
-
-    @views[index].element.remove()
-    @views[index] = null
-    @views.splice(index,1)
-    @views_line_number.splice(index,1)
-
-  appendMarker: (marker) ->
-    @append(marker.element)
-    @views.push(marker)
-    @views_line_number.push(marker.range.start.row)
-
-  # handleSelection: =>
-  #   @removeMarkers()
-  #
-  handleMove: =>
-    # if @views.length>0
-      # searcherReference = @views[0].searcher
-      # searcherReference.markAll()
-
-  removeMarkers: =>
-    return unless @views?
-    return if @views.length is 0
-    for view in @views
-      view.element.remove()
-      view = null
     @views = []
+    
