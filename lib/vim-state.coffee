@@ -1114,7 +1114,11 @@ class VimState
       socket2 = new net.Socket()
       socket2.connect('/Users/carlos/tmp/neovim15');
       socket2.on('error', (error) =>
-        console.log 'error communicating (send message)'
+        console.log 'error communicating (send message): ' + error
+        socket2.destroy()
+      )
+      socket2.on('end', =>
+        socket2.destroy()
       )
       socket2.on('data', (data) =>
           # console.log data.toString()
@@ -1128,9 +1132,9 @@ class VimState
           socket2.destroy()
       )
       msg2 = encode_pub(message)
-      socket2.write(msg2)
+      socket2.write(msg2, => socket2.end())
     catch err
-      console.log 'error in neovim_send_message'
+      console.log 'error in neovim_send_message '+err
 
 
   # last deleted buffer.
