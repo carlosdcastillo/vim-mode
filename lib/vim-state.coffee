@@ -745,6 +745,7 @@ class VimState
     @linelen = 5
 
     @changeModeClass('command-mode')
+    @activateCommandMode()
 
     #@setupCommandMode()
     #@registerInsertIntercept()
@@ -765,7 +766,7 @@ class VimState
     $(window).preempt 'beforeunload', =>
       for pane in atom.workspaceView.getPanes()
         @destroy_sockets(paneItem) for paneItem in pane.getItems()
-
+        
     @height = 100
     @line0 = 1
 
@@ -1149,7 +1150,6 @@ class VimState
   #
   # Returns nothing.
   activateCommandMode: ->
-    @deactivateInsertMode()
     @mode = 'command'
     @submode = null
 
@@ -1159,8 +1159,8 @@ class VimState
 
     @changeModeClass('command-mode')
 
-    @clearOpStack()
-    @editor.clearSelections()
+    #@clearOpStack()
+    #@editor.clearSelections()
 
     @updateStatusBar()
 
@@ -1174,13 +1174,6 @@ class VimState
     @changeModeClass('insert-mode')
     @updateStatusBar()
 
-  deactivateInsertMode: ->
-    return unless @mode == 'insert'
-    @editor.commitTransaction()
-    transaction = _.last(@editor.buffer.history.undoStack)
-    item = @inputOperator(@history[0])
-    if item? and transaction?
-      item.confirmTransaction(transaction)
 
   # Private: Get the input operator that needs to be told about about the
   # typed undo transaction in a recently completed operation, if there
