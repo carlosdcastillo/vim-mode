@@ -9,82 +9,109 @@ MarkerView = require './marker-view'
 
 bops_readUInt8 = (target, at) ->
   target[at]
+
 bops_readInt8 = (target, at) ->
   v = target[at]
   (if v < 0x80 then v else v - 0x100)
+
 bops_readUInt16LE = (target, at) ->
   dv = map.get(target)
   dv.getUint16 at + target.byteOffset, true
+
 bops_readUInt32LE = (target, at) ->
   dv = map.get(target)
   dv.getUint32 at + target.byteOffset, true
+
 bops_readInt16LE = (target, at) ->
   dv = map.get(target)
   dv.getInt16 at + target.byteOffset, true
+
 bops_readInt32LE = (target, at) ->
   dv = map.get(target)
   dv.getInt32 at + target.byteOffset, true
+
 bops_readFloatLE = (target, at) ->
   dv = map.get(target)
   dv.getFloat32 at + target.byteOffset, true
+
 bops_readDoubleLE = (target, at) ->
   dv = map.get(target)
   dv.getFloat64 at + target.byteOffset, true
+
 bops_readUInt16BE = (target, at) ->
   dv = map.get(target)
   dv.getUint16 at + target.byteOffset, false
+
 bops_readUInt32BE = (target, at) ->
   dv = map.get(target)
   dv.getUint32 at + target.byteOffset, false
+
 bops_readInt16BE = (target, at) ->
   dv = map.get(target)
   dv.getInt16 at + target.byteOffset, false
+
 bops_readInt32BE = (target, at) ->
   dv = map.get(target)
   dv.getInt32 at + target.byteOffset, false
+
 bops_readFloatBE = (target, at) ->
   dv = map.get(target)
   dv.getFloat32 at + target.byteOffset, false
+
 bops_readDoubleBE = (target, at) ->
   dv = map.get(target)
   dv.getFloat64 at + target.byteOffset, false
+
 bops_writeUInt8 = (target, value, at) ->
   target[at] = value
+
 bops_writeInt8 = (target, value, at) ->
   target[at] = (if value < 0 then value + 0x100 else value)
+
 bops_writeUInt16LE = (target, value, at) ->
   dv = map.get(target)
   dv.setUint16 at + target.byteOffset, value, true
+
 bops_writeUInt32LE = (target, value, at) ->
   dv = map.get(target)
   dv.setUint32 at + target.byteOffset, value, true
+
 bops_writeInt16LE = (target, value, at) ->
   dv = map.get(target)
   dv.setInt16 at + target.byteOffset, value, true
+
 bops_writeInt32LE = (target, value, at) ->
   dv = map.get(target)
   dv.setInt32 at + target.byteOffset, value, true
+
 bops_writeFloatLE = (target, value, at) ->
   dv = map.get(target)
   dv.setFloat32 at + target.byteOffset, value, true
+
 bops_writeDoubleLE = (target, value, at) ->
   dv = map.get(target)
   dv.setFloat64 at + target.byteOffset, value, true
+
 bops_writeUInt16BE = (target, value, at) ->
   dv = map.get(target)
   dv.setUint16 at + target.byteOffset, value, false
+
 bops_writeUInt32BE = (target, value, at) ->
   dv = map.get(target)
   dv.setUint32 at + target.byteOffset, value, false
+
 bops_writeInt16BE = (target, value, at) ->
   dv = map.get(target)
   dv.setInt16 at + target.byteOffset, value, false
+
 bops_writeInt32BE = (target, value, at) ->
   dv = map.get(target)
   dv.setInt32 at + target.byteOffset, value, false
+
 bops_writeFloatBE = (target, value, at) ->
   dv = map.get(target)
   dv.setFloat32 at + target.byteOffset, value, false
+
 bops_writeDoubleBE = (target, value, at) ->
   dv = map.get(target)
   dv.setFloat64 at + target.byteOffset, value, false
@@ -103,6 +130,7 @@ bops_to = (source, encoding) ->
 
 bops_from = (source, encoding) ->
   new Buffer(source, encoding)
+
 bops_is = (buffer) ->
   Buffer.isBuffer buffer
 
@@ -113,10 +141,12 @@ encode_pub = (value) ->
   buffer = bops_create(size)
   encode value, buffer, 0
   buffer
+
 Decoder = (buffer, offset) ->
   @offset = offset or 0
   @buffer = buffer
   return
+
 Decoder::map = (length) ->
   value = {}
   i = 0
@@ -415,6 +445,7 @@ Decoder::parse = ->
       return @buf(length)
   throw new Error("Unknown type 0x" + type.toString(16))
   return
+
 decode_pub = (buffer) ->
   decoder = new Decoder(buffer)
   value = decoder.parse()
@@ -615,6 +646,7 @@ encode = (value, buffer, offset) ->
   return `undefined`  if type is "function"
   throw new Error("Unknown type " + type)
   return
+
 sizeof = (value) ->
   type = typeof value
   length = undefined
@@ -707,8 +739,10 @@ sizeof = (value) ->
   return 0  if type is "function"
   throw new Error("Unknown type " + type)
   return
+
 to_uint8array = (str) ->
   new Uint8Array(str);
+
 str2ab = (str) ->
   bufView = new Uint8Array(str.length)
   i = 0
@@ -1013,12 +1047,15 @@ class VimState
   ns_redraw_start:(q) =>
     console.log "redraw start:"
     console.log q
+
   ns_redraw_end:(q) =>
     console.log "redraw end:"
     console.log q
+
   ns_redraw_win_start:(q) =>
     console.log "redraw win start:"
     console.log q
+
   ns_redraw_win_end:(q) =>
     #console.log "redraw win end:"
     #console.log q
