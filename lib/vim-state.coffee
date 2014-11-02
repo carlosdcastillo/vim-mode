@@ -1,8 +1,5 @@
 _ = require 'underscore-plus'
 {$} = require 'atom'
-
-
-
 {$$, Point, Range} = require 'atom'
 Marker = require 'atom'
 net = require 'net'
@@ -784,7 +781,7 @@ class VimState
     @subscriptions['redraw:win_end'] = false
 
     socket = new net.Socket()
-    socket.connect('/Users/carlos/tmp/neovim15');
+    socket.connect('/Users/carlos/tmp/neovim19');
 
     socket.on('data', (data) =>
         {value:q,trailing} = decode_pub(to_uint8array(data))
@@ -854,8 +851,11 @@ class VimState
 
 
   activePaneChanged: =>
-    @neovim_send_message([0,1,23,['e! '+atom.workspaceView.getActiveView().getEditor().getUri()]],(q) => @afterOpen())
-    @editorView.on 'editor:min-width-changed', @editorSizeChanged
+    try
+      @neovim_send_message([0,1,23,['e! '+atom.workspaceView.getActiveView().getEditor().getUri()]],(q) => @afterOpen())
+      @editorView.on 'editor:min-width-changed', @editorSizeChanged
+    catch err
+      console.log 'problem changing panes'
 
   afterOpen: =>
 
@@ -1026,20 +1026,21 @@ class VimState
     @neovim_send_message([0,1,25,["expand('%:p')"]], (filename) =>
       if filename isnt @editor.getUri()
         atom.workspace.open(filename)
+      else
+        @neovim_send_message([0,1,25,["line('$')"]], (nLines) =>
+          if @editor.buffer.getLastRow() < parseInt(nLines)
+            nl = parseInt(nLines) - @editor.buffer.getLastRow()
+            diff = ''
+            for i in [0..nl-1]
+              diff = diff + '\n'
+            @editor.buffer.append(diff, true)
+
+          if @editor.buffer.getLastRow() > parseInt(nLines)
+            for i in [parseInt(nLines)+1..@editor.buffer.getLastRow()-1]
+               @editor.buffer.deleteRow(i)
+        )
     )
 
-    @neovim_send_message([0,1,25,["line('$')"]], (nLines) =>
-      if @editor.buffer.getLastRow() < parseInt(nLines)
-        nl = parseInt(nLines) - @editor.buffer.getLastRow()
-        diff = ''
-        for i in [0..nl-1]
-          diff = diff + '\n'
-        @editor.buffer.append(diff, true)
-
-      if @editor.buffer.getLastRow() > parseInt(nLines)
-        for i in [parseInt(nLines)+1..@editor.buffer.getLastRow()-1]
-           @editor.buffer.deleteRow(i)
-    )
 
 #    @neovim_send_message([0,1,25,["line('w$')"]], (lastLine) =>
 #      @height = Math.max(@editorView.getPageRows(),20)
@@ -1056,7 +1057,7 @@ class VimState
   neovim_subscribe:(events) =>
     if @socket_subs == null
       @socket_subs = new net.Socket()
-      @socket_subs.connect('/Users/carlos/tmp/neovim15');
+      @socket_subs.connect('/Users/carlos/tmp/neovim19');
     collected = new Buffer(0)
     @socket_subs.on('error', (error) =>
       console.log 'error communicating (subscribe)'
@@ -1112,7 +1113,7 @@ class VimState
   neovim_send_message:(message,f = undefined) ->
     try
       socket2 = new net.Socket()
-      socket2.connect('/Users/carlos/tmp/neovim15');
+      socket2.connect('/Users/carlos/tmp/neovim19');
       socket2.on('error', (error) =>
         console.log 'error communicating (send message): ' + error
         socket2.destroy()
