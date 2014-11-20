@@ -1,11 +1,11 @@
 {
-  "name": "vim-mode",
+  "name": "atom-neovim",
   "main": "./lib/vim-mode",
   "version": "0.10.1",
-  "description": "Add vim modal control",
+  "description": "Make Atom your GUI to NeoVim.",
   "license": "MIT",
   "private": true,
-  "repository": "https://github.com/atom/vim-mode",
+  "repository": "https://github.com/carlosdcastillo/vim-mode",
   "engines": {
     "atom": ">0.99.0"
   },
