@@ -25,3 +25,9 @@ http://www.youtube.com/watch?v=lH_zb7X6mZw
 and show the command line when you type :w and such.
 * Fix the several issues with the communication in such a way that there are no
 breaks in communication.
+* Handle Atom-centric text editing actions, i.e., situations like the user searching and replacing in Atom by hitting Cmd-F
+
+# Contributing
+
+1. Find something that doesn't work (this step shouldn't be that hard, plenty of things don't work yet)
+2. Fix it. 3. Send me a pull request.
