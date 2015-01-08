@@ -7,6 +7,18 @@ map = require './mapped'
 Buffer = require("buffer").Buffer
 MarkerView = require './marker-view'
 
+CONNECT_TO = '/Users/carlos/tmp/neovim322'
+MESSAGE_COUNTER = 1
+
+subscriptions = {}
+subscriptions['redraw'] = false
+socket_subs = null
+collected = new Buffer(0)
+screen = []
+tlnumber = 0
+cursor_visible = true
+consecutive_unempty_runs = 0
+
 bops_readUInt8 = (target, at) ->
   target[at]
 
@@ -40,11 +52,17 @@ bops_readDoubleLE = (target, at) ->
 
 bops_readUInt16BE = (target, at) ->
   dv = map.get(target)
-  dv.getUint16 at + target.byteOffset, false
+  if at+target.byteOffset + 2 < dv.byteLength
+    dv.getUint16 at + target.byteOffset, false
+  else
+    undefined
 
 bops_readUInt32BE = (target, at) ->
   dv = map.get(target)
-  dv.getUint32 at + target.byteOffset, false
+  if at+target.byteOffset + 4 < dv.byteLength
+    dv.getUint32 at + target.byteOffset, false
+  else
+    undefined
 
 bops_readInt16BE = (target, at) ->
   dv = map.get(target)
@@ -158,9 +176,17 @@ Decoder::map = (length) ->
   value
 
 Decoder::bin = (length) ->
-  value = bops_subarray(@buffer, @offset, @offset + length)
-  @offset += length
-  value
+#  value = bops_subarray(@buffer, @offset, @offset + length)
+#  @offset += length
+#  value
+  res = ''
+  i = 0
+  while i < length
+    res = res + String.fromCharCode(@buffer[@offset+i])
+    i++
+  if length
+    @offset += length
+  res
 
 Decoder::str = (length) ->
   res = ''
@@ -168,12 +194,13 @@ Decoder::str = (length) ->
   while i < length
     res = res + String.fromCharCode(@buffer[@offset+i])
     i++
-  @offset += length
+  if length
+    @offset += length
   res
 
-  # value = (bops_subarray(@buffer, @offset, @offset + length))
-  # @offset += length
-  # value
+#  value = bops_to(bops_subarray(@buffer, @offset, @offset + length), 'utf8')
+#  @offset += length
+#  value
 
 Decoder::array = (length) ->
   value = new Array(length)
@@ -182,7 +209,10 @@ Decoder::array = (length) ->
   while i < length
     value[i] = @parse()
     i++
-  value
+  if length
+    value
+  else
+    undefined
 
 Decoder::parse = ->
   type = @buffer[@offset]
@@ -245,13 +275,15 @@ Decoder::parse = ->
     # bin 16
     when 0xc5
       length = bops_readUInt16BE(@buffer, @offset + 1)
-      @offset += 3
+      if length
+        @offset += 3
       return @bin(length)
 
     # bin 32
     when 0xc6
       length = bops_readUInt32BE(@buffer, @offset + 1)
-      @offset += 5
+      if length
+        @offset += 5
       return @bin(length)
 
     # ext 8
@@ -305,13 +337,15 @@ Decoder::parse = ->
     # uint 16
     when 0xcd
       value = bops_readUInt16BE(@buffer, @offset + 1)
-      @offset += 3
+      if value
+        @offset += 3
       return value
 
     # uint 32
     when 0xce
       value = bops_readUInt32BE(@buffer, @offset + 1)
-      @offset += 5
+      if value
+        @offset += 5
       return value
 
     # uint64
@@ -399,19 +433,22 @@ Decoder::parse = ->
     # str 16
     when 0xda
       length = bops_readUInt16BE(@buffer, @offset + 1)
-      @offset += 3
+      if length
+        @offset += 3
       return @str(length)
 
     # str 32
     when 0xdb
       length = bops_readUInt32BE(@buffer, @offset + 1)
-      @offset += 5
+      if length
+        @offset += 5
       return @str(length)
 
     # array 16
     when 0xdc
       length = bops_readUInt16BE(@buffer, @offset + 1)
-      @offset += 3
+      if length
+        @offset += 3
       return @array(length)
 
     # array 32
@@ -423,7 +460,8 @@ Decoder::parse = ->
     # map 16:
     when 0xde
       length = bops_readUInt16BE(@buffer, @offset + 1)
-      @offset += 3
+      if length
+        @offset += 3
       return @map(length)
 
     # map 32
@@ -435,7 +473,8 @@ Decoder::parse = ->
     # buffer 16
     when 0xd8
       length = bops_readUInt16BE(@buffer, @offset + 1)
-      @offset += 3
+      if length
+        @offset += 3
       return @buf(length)
 
     # buffer 32
@@ -772,7 +811,6 @@ class VimState
     params.id = 0;
     @area = new HighlightedAreaView(@editorView)
     @area.attach()
-    @socket_subs = null
     @linelen = 5
 
     @changeModeClass('command-mode')
@@ -803,33 +841,26 @@ class VimState
 
     @range_list = []
     @range_line_list = []
-    @subscriptions = {}
-    @subscriptions['redraw:cursor'] = false;
-    @subscriptions['redraw:update_line'] = false;
-    @subscriptions['redraw:layout'] = false;
-    @subscriptions['redraw:foreground_color'] = false
-    @subscriptions['redraw:background_color'] = false
-    @subscriptions['redraw:start'] = false
-    @subscriptions['redraw:end'] = false
-    @subscriptions['redraw:win_start'] = false
-    @subscriptions['redraw:win_end'] = false
 
     socket = new net.Socket()
-    socket.connect('/Users/carlos/tmp/neovim19');
+    socket.connect(CONNECT_TO)
 
     socket.on('data', (data) =>
         {value:q,trailing} = decode_pub(to_uint8array(data))
-        {value:qq,trailing} = decode_pub(str2ab(q[3][1]))
-        console.log qq
+        console.log q
+        console.log trailing
+        qq = q[3][1]
+        console.log 'data:',qq
         socket.end()
         socket.destroy()
     )
-    msg = encode_pub([0,1,0,[]])
+    msg = encode_pub([0,1,'vim_get_api_info',[]])
     socket.write(msg)
-    @neovim_send_message([0,1,39,[]])
-
-    # @neovim_send_message([0,1,22,['jjj']])
-    # @neovim_send_message([0,1,22,['l']])
+    
+    @neovim_subscribe(['redraw:foreground_color','redraw:background_color',
+        'redraw:layout','redraw:cursor','redraw:update_line','redraw:insert_line',
+        'redraw:delete_line','redraw:start','redraw:end','redraw:win_start','redraw:win_end'])
+    
     atom.project.eachBuffer (buffer) =>
       @registerChangeHandler(buffer)
 
@@ -839,7 +870,8 @@ class VimState
           if @editorView.hasClass('is-focused')
             q =  String.fromCharCode(e.which)
             console.log "pressed:"+q
-            @neovim_send_message([0,1,22,[q]])
+            #@neovim_send_message([0,1,'vim_feedkeys',[q,'command',false]])
+            @neovim_send_message([0,1,'vim_input',[q]])
             false
           else
             true
@@ -847,7 +879,8 @@ class VimState
           if @editorView.hasClass('is-focused') and not e.altKey
             translation = @translateCode(e.which, e.shiftKey, e.ctrlKey)
             if translation != ""
-              @neovim_send_message([0,1,22,[translation]])
+              #@neovim_send_message([0,1,'vim_feedkeys',[translation,'command',false]])
+              @neovim_send_message([0,1,'vim_input',[translation]])
               false
           else
             true
@@ -867,45 +900,55 @@ class VimState
     else
       ""
   destroy_sockets:(editor) =>
-    if @subscriptions['redraw:cursor'] or @subscriptions['redraw:update_line']
-      if editor.getUri() != @editor.getUri()
-        @subscriptions['redraw:cursor'] = false
-        @subscriptions['redraw:update_line'] = false
-        @subscriptions['redraw:layout'] = false
-        @subscriptions['redraw:foreground_color'] = false
-        @subscriptions['redraw:background_color'] = false
-        @subscriptions['redraw:start'] = false
-        @subscriptions['redraw:end'] = false
-        @subscriptions['redraw:win_start'] = false
-        @subscriptions['redraw:win_end'] = false
+    if subscriptions['redraw']
+        if editor.getUri() != @editor.getUri()
+            #subscriptions['redraw'] = false
 
-        @socket_subs.end()
-        @socket_subs.destroy()
-        @socket_subs = null
+            console.log 'unsubscribing'
+
+            #message = [0,1,'ui_detach',[]]
+            #message[1] = MESSAGE_COUNTER
+            #MESSAGE_COUNTER = (MESSAGE_COUNTER + 1) % 256
+            #console.log 'MESSAGE_COUNTER',MESSAGE_COUNTER
+            #msg2 = encode_pub(message)
+
+            #socket_subs.write(msg2)
+            #socket_subs.end()
+            #socket_subs.destroy()
+            #socket_subs = null
+
+            #collected = new Buffer(0)
 
 
   activePaneChanged: =>
     try
-      @neovim_send_message([0,1,23,['e! '+atom.workspaceView.getActiveView().getEditor().getUri()]],(q) => @afterOpen())
-      @editorView.on 'editor:min-width-changed', @editorSizeChanged
+        console.log 'active pane changed',atom.workspaceView.getActiveView().getEditor().getUri()
+        @neovim_send_message([0,1,'vim_command',['e! '+atom.workspaceView.getActiveView().getEditor().getUri()]])
+        @afterOpen()
+        @editorView.on 'editor:min-width-changed', @editorSizeChanged
     catch err
-      console.log 'problem changing panes'
+        console.log 'problem changing panes'
 
   afterOpen: =>
 
-    @neovim_send_message([0,1,23,['set scrolloff=2']])
-    @neovim_send_message([0,1,23,['set nowrap']])
-    @neovim_send_message([0,1,23,['set nu']])
-    @neovim_send_message([0,1,23,['set autochdir']])
-    @neovim_send_message([0,1,23,['set hlsearch']])
+    console.log 'in after open'
+    @neovim_send_message([0,1,'vim_command',['set scrolloff=100']])
+    @neovim_send_message([0,1,'vim_command',['set noswapfile']])
+    @neovim_send_message([0,1,'vim_command',['set nowrap']])
+    @neovim_send_message([0,1,'vim_command',['set nu']])
+    @neovim_send_message([0,1,'vim_command',['set autochdir']])
+    @neovim_send_message([0,1,'vim_command',['set hlsearch']])
+    @neovim_send_message([0,1,'vim_command',['redraw!']])
 
-    subscription_callback = {}
 
-    @neovim_send_message([0,1,23,['redraw!']], (dummy) =>
-      @neovim_subscribe(['redraw:foreground_color','redraw:background_color',
-          'redraw:layout','redraw:cursor','redraw:update_line','redraw:insert_line',
-          'redraw:delete_line','redraw:start','redraw:end','redraw:win_start','redraw:win_end'])
-    )
+    if not subscriptions['redraw']
+        console.log 'subscribing, after open'
+        @neovim_subscribe(['redraw:foreground_color','redraw:background_color',
+            'redraw:layout','redraw:cursor','redraw:update_line','redraw:insert_line',
+            'redraw:delete_line','redraw:start','redraw:end','redraw:win_start','redraw:win_end'])
+    #else
+        #console.log 'NOT SUBSCRIBING, problem'
+        #
 
   ns_redraw_background_color:(q) =>
 
@@ -967,8 +1010,8 @@ class VimState
         linerange = new Range(new Point(qrow+@line0-1,0),new Point(qrow+@line0-1,1024))
         currenttext = @editor.getTextInBufferRange(linerange)
 
-        if currenttext isnt qlinecontents and @subscriptions['redraw:update_line']
-          @neovim_send_message([0,1,25,["expand('%:p')"]], (filename) =>
+        if currenttext isnt qlinecontents and subscriptions['redraw:update_line']
+          @neovim_send_message([0,1,'vim_eval',["expand('%:p')"]], (filename) =>
             if filename == @editor.getUri()
               @editor.setTextInBufferRange(linerange,qlinecontents)
           )
@@ -1060,11 +1103,11 @@ class VimState
     #console.log "redraw win end:"
     #console.log q
 
-    @neovim_send_message([0,1,25,["expand('%:p')"]], (filename) =>
+    @neovim_send_message([0,1,'vim_eval',["expand('%:p')"]], (filename) =>
       if filename isnt @editor.getUri()
         atom.workspace.open(filename)
       else
-        @neovim_send_message([0,1,25,["line('$')"]], (nLines) =>
+        @neovim_send_message([0,1,'vim_eval',["line('$')"]], (nLines) =>
           if @editor.buffer.getLastRow() < parseInt(nLines)
             nl = parseInt(nLines) - @editor.buffer.getLastRow()
             diff = ''
@@ -1088,89 +1131,217 @@ class VimState
   editorSizeChanged: =>
     @height = Math.max(@editorView.getPageRows(),20)
     @line0 = 1
-    @neovim_send_message([0,1,23,['set lines='+@height]])
+    @neovim_send_message([0,1,'vim_command',['set lines='+@height]])
+    console.log 'HEIGHT:',@height
 
 
   neovim_subscribe:(events) =>
-    if @socket_subs == null
-      @socket_subs = new net.Socket()
-      @socket_subs.connect('/Users/carlos/tmp/neovim19');
-    collected = new Buffer(0)
-    @socket_subs.on('error', (error) =>
+    console.log 'neovim_subscribe'
+    if socket_subs == null
+        socket_subs = new net.Socket()
+        socket_subs.connect(CONNECT_TO)
+        collected = new Buffer(0)
+
+    socket_subs.on('error', (error) =>
       console.log 'error communicating (subscribe)'
     )
-    @socket_subs.on('data', (data) =>
-        collected = Buffer.concat([collected, data]);
-        i = 1
+
+    socket_subs.on('data', (data) =>
+        i = collected.length
+        collected = Buffer.concat([collected, data])
+        console.log 'collected.length',collected.length
         while i <= collected.length
           try
-            {value:q,trailing} = decode_pub(to_uint8array(collected.slice(0,i)))
+            v = collected.slice(0,i)
+            {value:q,trailing} = decode_pub(to_uint8array(v))
             if trailing == 0
-              collected = collected.slice(i,collected.length)
-              if q[2] and q[1] in events and @subscriptions[q[1]]
-                if q[1] is 'redraw:background_color'
-                  @ns_redraw_background_color(q[2])
-                if q[1] is 'redraw:background_color'
-                  @ns_redraw_foreground_color(q[2])
-                if q[1] is 'redraw:layout'
-                  @ns_redraw_layout(q[2])
-                if q[1] is 'redraw:cursor'
-                  @ns_redraw_cursor(q[2])
-                if q[1] is 'redraw:update_line'
-                  @ns_redraw_update_line(q[2])
-                if q[1] is 'redraw:insert_line'
-                  @ns_redraw_insert_line(q[2])
-                if q[1] is 'redraw:delete_line'
-                  @ns_redraw_delete_line(q[2])
-                if q[1] is 'redraw:start'
-                  @ns_redraw_start(q[2])
-                if q[1] is 'redraw:end'
-                  @ns_redraw_end(q[2])
-                if q[1] is 'redraw:win_start'
-                  @ns_redraw_win_start(q[2])
-                if q[1] is 'redraw:win_end'
-                  @ns_redraw_win_end(q[2])
+                #console.log 'subscribe',q
+                [bufferId, eventName, eventInfo] = q
+                if eventName is "redraw"
+                    #console.log "eventInfo", eventInfo
+                    for x in eventInfo
+                        if x[0] is "cursor_goto"
+                            for v in x[1..]
 
-              i = 1
+                                location[0] = parseInt(v[0])
+                                location[1] = parseInt(v[1])
+
+                        #if x[0] is 'set_scroll_region'
+                            #srtlnumber = parseInt(x[1][0])
+
+                        if x[0] is "insert_mode"
+                            @activateInsertMode()
+
+                        if x[0] is "normal_mode"
+                            @activateCommandMode()
+
+                        if x[0] is "cursor_on"
+                            cursor_visible = true
+
+                        if x[0] is "cursor_off"
+                            cursor_visible = false
+
+                        if x[0] is "scroll"
+                            for v in x[1..]
+                                count = parseInt(v[0])
+                                console.log 'scrolling:',count
+                                tlnumber = tlnumber + count
+                                if count > 0
+                                    #down
+                                    screen = screen[count..]
+                                    for posi in [0..count-1]
+                                        screen.push((' ' for qq in [1..cols]))
+                                else
+                                    count = -count
+                                    screen2 = []
+                                    for posi in [0..count-1]
+                                        screen2.push((' ' for qq in [1..cols]))
+                                    for item in screen[0..screen.length-1-count]
+                                        screen2.push(item)
+                                    screen = screen2
+                                #console.log 'screen:',screen
+                                    
+                                @neovim_send_message([0,1,'vim_command',['redraw!']])
+
+                        if x[0] is "put"
+                            cnt = 0
+                            for v in x[1..]
+                                if 0<=location[0] and location[0] < rows-1
+                                    if location[1]>=0 and location[1]<100
+                                        try
+                                            qq = v[0]
+                                            screen[location[0]][location[1]] = qq
+                                            location[1] = location[1] + qq.length
+                                        catch  puterr
+                                            console.log 'put err, but no big deal'
+                                else if location[0] == rows - 1
+                                    status_bar[location[1]] = v[0]
+                                    location[1] = location[1] + 1
+
+                                else if location[0] > rows - 1
+                                    console.log 'over the max'
+
+                                
+                        if x[0] is "clear"
+                            #console.log 'clear'
+                            for posj in [0..cols-1]
+                                for posi in [0..rows-2]
+                                    screen[posi][posj] = ' '
+                                    #linerange = new Range(new Point(posi,posj),new Point(posi,posj + qq.length))
+                                    #@editor.setTextInBufferRange(linerange,qq)
+                            #status_bar = (' ' for qq in [1..100])
+                            #sbt = status_bar.join('').trim()
+                            #@updateStatusBarWithText(sbt)
+
+                        if x[0] is "eol_clear"
+                            #console.log 'eol_clear'
+                            if location[0] < rows - 1
+                                for posj in [location[1]..cols-1]
+                                    for posi in [location[0]..location[0]]
+                                        if posj >= 0
+                                            screen[posi][posj] = ' '
+                                            #qq = ' '
+                                            #linerange = new Range(new Point(posi,posj - 4),new Point(posi,posj - 4 + qq.length))
+                                            #@editor.setTextInBufferRange(linerange,qq)
+                            else if location[0] == rows - 1
+                                for posj in [location[1]..cols-1]
+                                    status_bar[posj] = ' '
+                            else if location[0] > rows - 1
+                                console.log 'over the max'
+
+
+                                
+
+                    #get top left from screen
+                    if not isNaN(parseInt(screen[0][0..3].join('')))
+                        tlnumber = parseInt(screen[0][0..3].join('')) - 1
+                    console.log 'tlnumber:',tlnumber
+                    lf = []
+                    for posi in [0..rows-2]
+                        qq = screen[posi]
+                        #qq = qq[4..].join('')
+                        qq = qq[..].join('')   #this is for debugging
+                        lf.push(qq)
+
+                    n = lf[lf.length-1].length
+                    qq = lf.join('\n')
+                    linerange = new Range(new Point(tlnumber,0),new Point(tlnumber + rows - 2, n))
+                    @editor.setTextInBufferRange(linerange,qq)
+
+                    sbt = status_bar.join('').trim()
+                    @updateStatusBarWithText(sbt)
+
+                    #if location[1] >= 4
+                    @editor.setCursorBufferPosition(new Point(tlnumber + location[0], location[1]-4),{autoscroll:cursor_visible})
+
+                collected = collected.slice(i,collected.length)
+                i = 1
             else
-              if trailing < 0
-                i = i - trailing
-              else
-                i = i + trailing
+                #if isNaN(trailing)
+                    #i = i + 1
+                #else
+                if trailing < 0
+                    i = i - trailing
+                else
+                    i = i + trailing
           catch err
-            i = i + 1
+              console.log err,i,collected.length
+              console.log 'stack:',err.stack
+              i = i + 1
+
+
+        #if collected.length == 0
+            #consecutive_unempty_runs = 0
+        #else
+            #consecutive_unempty_runs = consecutive_unempty_runs + 1
+            #console.log 'consecutive_unempty_runs:',consecutive_unempty_runs
+
+        #if consecutive_unempty_runs > 3
+            #collected = new Buffer(0)
     )
 
-    for event in events
-      msg2 = encode_pub([0,1,48,[event]])
-      @socket_subs.write(msg2)
-      @subscriptions[event] = true
+    rows = 40
+    cols = 100
+    message = [0,1,'ui_attach',[cols,rows]]
+    #rows = @editor.getScreenLineCount()
+    location = [0,0]
+    status_bar = (' ' for ux in [1..cols])
+    screen = ((' ' for ux in [1..cols])  for uy in [1..rows-1])
+
+
+    message[1] = MESSAGE_COUNTER
+    MESSAGE_COUNTER = (MESSAGE_COUNTER + 1) % 256
+    console.log 'MESSAGE_COUNTER',MESSAGE_COUNTER
+    msg2 = encode_pub(message)
+    socket_subs.write(msg2)
+    subscriptions['redraw'] = true
+
 
 
   neovim_send_message:(message,f = undefined) ->
     try
       socket2 = new net.Socket()
-      socket2.connect('/Users/carlos/tmp/neovim19');
+      socket2.connect(CONNECT_TO)
       socket2.on('error', (error) =>
         console.log 'error communicating (send message): ' + error
         socket2.destroy()
       )
-      socket2.on('end', =>
+      #socket2.on('end', =>
+        #socket2.destroy()
+      #)
+      socket2.on('data', (data) =>
+        {value:q, trailing:t} = decode_pub(to_uint8array(data))
+        if t isnt 0
+            console.log 'not reliable'
+        if f
+            f(q[3])
         socket2.destroy()
       )
-      socket2.on('data', (data) =>
-          # console.log data.toString()
-          # console.log data
-          # console.log to_uint8array(data)
-          {value:q, trailing:t} = decode_pub(to_uint8array(data))
-          if t isnt 0
-            console.log 'not reliable'
-          if f
-            f(q[3])
-          socket2.destroy()
-      )
+      message[1] = MESSAGE_COUNTER
+      MESSAGE_COUNTER = (MESSAGE_COUNTER + 1) % 256
       msg2 = encode_pub(message)
-      socket2.write(msg2, => socket2.end())
+      #socket2.write(msg2, => socket2.end())
+      socket2.write(msg2)
     catch err
       console.log 'error in neovim_send_message '+err
 
@@ -1257,6 +1428,13 @@ class VimState
         @editorView.addClass(mode)
       else
         @editorView.removeClass(mode)
+
+  updateStatusBarWithText:(text) ->
+    if !$('#status-bar-vim-mode').length
+      atom.packages.once 'activated', ->
+        atom.workspaceView.statusBar?.prependRight("<div id='status-bar-vim-mode' class='inline-block'>Command</div>")
+
+    $('#status-bar-vim-mode').html(text)
 
   updateStatusBar: ->
     if !$('#status-bar-vim-mode').length
