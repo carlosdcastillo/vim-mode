@@ -20,6 +20,13 @@
   }
 }
 
+.vim-mode.invisible-mode {
+  .cursor, .cursor.blink-off {
+    .block-cursor(hidden);
+    width: 0;
+  }
+}
+
 .vim-mode.visual-mode {
   .cursor.hidden-cursor {
     display: block;

@@ -7,7 +7,7 @@ map = require './mapped'
 Buffer = require("buffer").Buffer
 MarkerView = require './marker-view'
 
-CONNECT_TO = '/Users/carlos/tmp/neovim322'
+CONNECT_TO = '/Users/carlos/tmp/neovim416'
 MESSAGE_COUNTER = 1
 
 subscriptions = {}
@@ -17,7 +17,8 @@ collected = new Buffer(0)
 screen = []
 tlnumber = 0
 cursor_visible = true
-consecutive_unempty_runs = 0
+command_mode = true
+scrolled = false
 
 bops_readUInt8 = (target, at) ->
   target[at]
@@ -52,17 +53,17 @@ bops_readDoubleLE = (target, at) ->
 
 bops_readUInt16BE = (target, at) ->
   dv = map.get(target)
-  if at+target.byteOffset + 2 < dv.byteLength
-    dv.getUint16 at + target.byteOffset, false
-  else
-    undefined
+  #if at+target.byteOffset + 2 <= dv.byteLength
+  dv.getUint16(at + target.byteOffset, false)
+  #else
+    #undefined
 
 bops_readUInt32BE = (target, at) ->
   dv = map.get(target)
-  if at+target.byteOffset + 4 < dv.byteLength
-    dv.getUint32 at + target.byteOffset, false
-  else
-    undefined
+  #if at+target.byteOffset + 4 <= dv.byteLength
+  dv.getUint32(at + target.byteOffset, false)
+  #else
+    #undefined
 
 bops_readInt16BE = (target, at) ->
   dv = map.get(target)
@@ -184,8 +185,7 @@ Decoder::bin = (length) ->
   while i < length
     res = res + String.fromCharCode(@buffer[@offset+i])
     i++
-  if length
-    @offset += length
+  @offset += length
   res
 
 Decoder::str = (length) ->
@@ -194,8 +194,7 @@ Decoder::str = (length) ->
   while i < length
     res = res + String.fromCharCode(@buffer[@offset+i])
     i++
-  if length
-    @offset += length
+  @offset += length
   res
 
 #  value = bops_to(bops_subarray(@buffer, @offset, @offset + length), 'utf8')
@@ -209,10 +208,7 @@ Decoder::array = (length) ->
   while i < length
     value[i] = @parse()
     i++
-  if length
-    value
-  else
-    undefined
+  value
 
 Decoder::parse = ->
   type = @buffer[@offset]
@@ -275,15 +271,13 @@ Decoder::parse = ->
     # bin 16
     when 0xc5
       length = bops_readUInt16BE(@buffer, @offset + 1)
-      if length
-        @offset += 3
+      @offset += 3
       return @bin(length)
 
     # bin 32
     when 0xc6
       length = bops_readUInt32BE(@buffer, @offset + 1)
-      if length
-        @offset += 5
+      @offset += 5
       return @bin(length)
 
     # ext 8
@@ -337,15 +331,13 @@ Decoder::parse = ->
     # uint 16
     when 0xcd
       value = bops_readUInt16BE(@buffer, @offset + 1)
-      if value
-        @offset += 3
+      @offset += 3
       return value
 
     # uint 32
     when 0xce
       value = bops_readUInt32BE(@buffer, @offset + 1)
-      if value
-        @offset += 5
+      @offset += 5
       return value
 
     # uint64
@@ -433,8 +425,7 @@ Decoder::parse = ->
     # str 16
     when 0xda
       length = bops_readUInt16BE(@buffer, @offset + 1)
-      if length
-        @offset += 3
+      @offset += 3
       return @str(length)
 
     # str 32
@@ -442,26 +433,29 @@ Decoder::parse = ->
       length = bops_readUInt32BE(@buffer, @offset + 1)
       if length
         @offset += 5
+      else
+        @offset += read + 1
       return @str(length)
 
     # array 16
     when 0xdc
       length = bops_readUInt16BE(@buffer, @offset + 1)
-      if length
-        @offset += 3
+      @offset += 3
       return @array(length)
 
     # array 32
     when 0xdd
       length = bops_readUInt32BE(@buffer, @offset + 1)
-      @offset += 5
+      if length
+        @offset += 5
+      else
+        @offset += read + 1
       return @array(length)
 
     # map 16:
     when 0xde
       length = bops_readUInt16BE(@buffer, @offset + 1)
-      if length
-        @offset += 3
+      @offset += 3
       return @map(length)
 
     # map 32
@@ -473,8 +467,7 @@ Decoder::parse = ->
     # buffer 16
     when 0xd8
       length = bops_readUInt16BE(@buffer, @offset + 1)
-      if length
-        @offset += 3
+      @offset += 3
       return @buf(length)
 
     # buffer 32
@@ -488,7 +481,7 @@ Decoder::parse = ->
 decode_pub = (buffer) ->
   decoder = new Decoder(buffer)
   value = decoder.parse()
-  # throw new Error((buffer.length - decoder.offset) + " trailing bytes")  if decoder.offset isnt buffer.length
+  #throw new Error((buffer.length - decoder.offset) + " trailing bytes")  if decoder.offset isnt buffer.length
   {value:value, trailing:buffer.length - decoder.offset}
 
 encodeableKeys = (value) ->
@@ -932,7 +925,7 @@ class VimState
   afterOpen: =>
 
     console.log 'in after open'
-    @neovim_send_message([0,1,'vim_command',['set scrolloff=100']])
+    @neovim_send_message([0,1,'vim_command',['set scrolloff=5']])
     @neovim_send_message([0,1,'vim_command',['set noswapfile']])
     @neovim_send_message([0,1,'vim_command',['set nowrap']])
     @neovim_send_message([0,1,'vim_command',['set nu']])
@@ -1147,157 +1140,218 @@ class VimState
     )
 
     socket_subs.on('data', (data) =>
-        i = collected.length
         collected = Buffer.concat([collected, data])
+        i = collected.length
+        #if (collected.length % 8192 isnt 0) or (collected.length < 8192)
         console.log 'collected.length',collected.length
-        while i <= collected.length
-          try
-            v = collected.slice(0,i)
-            {value:q,trailing} = decode_pub(to_uint8array(v))
-            if trailing == 0
-                #console.log 'subscribe',q
-                [bufferId, eventName, eventInfo] = q
-                if eventName is "redraw"
-                    #console.log "eventInfo", eventInfo
-                    for x in eventInfo
-                        if x[0] is "cursor_goto"
-                            for v in x[1..]
+        while i >= 1
+            try
+                v = collected.slice(0,i)
+                {value:q,trailing} = decode_pub(to_uint8array(v))
+                if trailing >= 0
+                    #console.log 'subscribe',q
+                    [bufferId, eventName, eventInfo] = q
+                    if eventName is "redraw"
+                        #console.log "eventInfo", eventInfo
+                        for x in eventInfo
+                            if x[0] is "cursor_goto"
+                                for v in x[1..]
+                                    location[0] = parseInt(v[0])
+                                    location[1] = parseInt(v[1])
 
-                                location[0] = parseInt(v[0])
-                                location[1] = parseInt(v[1])
+                            if x[0] is 'set_scroll_region'
+                                screen_top = parseInt(x[1])
+                                screen_bot = parseInt(x[2])
+                                screen_left = parseInt(x[3])
+                                screen_right = parseInt(x[4])
 
-                        #if x[0] is 'set_scroll_region'
-                            #srtlnumber = parseInt(x[1][0])
+                            if x[0] is "insert_mode"
+                                @activateInsertMode()
+                                command_mode = false
 
-                        if x[0] is "insert_mode"
-                            @activateInsertMode()
+                            if x[0] is "normal_mode"
+                                @activateCommandMode()
+                                command_mode = true
 
-                        if x[0] is "normal_mode"
-                            @activateCommandMode()
-
-                        if x[0] is "cursor_on"
-                            cursor_visible = true
-
-                        if x[0] is "cursor_off"
-                            cursor_visible = false
-
-                        if x[0] is "scroll"
-                            for v in x[1..]
-                                count = parseInt(v[0])
-                                console.log 'scrolling:',count
-                                tlnumber = tlnumber + count
-                                if count > 0
-                                    #down
-                                    screen = screen[count..]
-                                    for posi in [0..count-1]
-                                        screen.push((' ' for qq in [1..cols]))
+                            if x[0] is "cursor_on"
+                                if command_mode
+                                    @activateCommandMode()
                                 else
-                                    count = -count
-                                    screen2 = []
-                                    for posi in [0..count-1]
-                                        screen2.push((' ' for qq in [1..cols]))
-                                    for item in screen[0..screen.length-1-count]
-                                        screen2.push(item)
-                                    screen = screen2
-                                #console.log 'screen:',screen
+                                    @activateInsertMode()
+                                cursor_visible = true
+
+                            if x[0] is "cursor_off"
+                                @activateInvisibleMode()
+                                cursor_visible = false
+
+                            if x[0] is "scroll"
+                                for v in x[1..]
+                                    top = screen_top
+                                    bot = screen_bot + 1
+
+                                    left = screen_left
+                                    right = screen_right + 1
+
+                                    count = parseInt(v[0])
+                                    console.log 'scrolling:',count
+                                    tlnumber = tlnumber + count
+                                    if count > 0
+                                        src_top = top+count
+                                        src_bot = bot
+                                        dst_top = top
+                                        dst_bot = bot - count
+                                        clr_top = dst_bot
+                                        clr_bot = src_bot
+
+                                        #down
+                                        #screen = screen[count..]
+                                        #for posi in [0..count-1]
+                                            #screen.push((' ' for qq in [1..cols]))
+                                    else
+                                        src_top = top
+                                        src_bot = bot + count
+                                        dst_top = top - count
+                                        dst_bot = bot
+                                        clr_top = src_top
+                                        clr_bot = dst_top
+
+                                        #count = -count
+                                        #screen2 = []
+                                        #for posi in [0..count-1]
+                                            #screen2.push((' ' for qq in [1..cols]))
+                                        #for item in screen[0..screen.length-1-count]
+                                            #screen2.push(item)
+                                        #screen = screen2
+                                    #console.log 'screen:',screen
+                                    for posi in [clr_top..clr_bot-1]
+                                        for posj in  [left..right-1]
+                                            screen[i][j] = ' '
+
+                                    top = screen_top
+                                    bottom = screen_bot
+                                    left = screen_left
+                                    right = screen_right
+                                    if count > 0
+                                        start = top
+                                        stop = bottom - count + 1
+                                        step = 1
+                                    else
+                                        start = bottom
+                                        stop = top - count + 1
+                                        step = -1
+
+                                    for row in [start..stop-1] by step
+                                        target_row = screen[row]
+                                        source_row = screen[row + count]
+                                        for col in [left..right]
+                                            tgt = target_row[col]
+                                            source_row[col] = tgt
+
+                                    for row in [stop..stop+count] by step
+                                        for col in [left..right]
+                                            screen[row][col] = ' '
+
+                                    scrolled = true
+                                        
+
+                            if x[0] is "put"
+                                cnt = 0
+                                for v in x[1..]
+                                    if 0<=location[0] and location[0] < rows-1
+                                        if location[1]>=0 and location[1]<100
+                                            try
+                                                qq = v[0]
+                                                screen[location[0]][location[1]] = qq
+                                                location[1] = location[1] + qq.length
+                                            catch  puterr
+                                                console.log 'put err, but no big deal'
+                                    else if location[0] == rows - 1
+                                        status_bar[location[1]] = v[0]
+                                        location[1] = location[1] + 1
+
+                                    else if location[0] > rows - 1
+                                        console.log 'over the max'
+
                                     
-                                @neovim_send_message([0,1,'vim_command',['redraw!']])
+                            if x[0] is "clear"
+                                #console.log 'clear'
+                                for posj in [0..cols-1]
+                                    for posi in [0..rows-2]
+                                        screen[posi][posj] = ' '
+                                        #linerange = new Range(new Point(posi,posj),new Point(posi,posj + qq.length))
+                                        #@editor.setTextInBufferRange(linerange,qq)
+                                #status_bar = (' ' for qq in [1..100])
+                                #sbt = status_bar.join('').trim()
+                                #@updateStatusBarWithText(sbt)
 
-                        if x[0] is "put"
-                            cnt = 0
-                            for v in x[1..]
-                                if 0<=location[0] and location[0] < rows-1
-                                    if location[1]>=0 and location[1]<100
-                                        try
-                                            qq = v[0]
-                                            screen[location[0]][location[1]] = qq
-                                            location[1] = location[1] + qq.length
-                                        catch  puterr
-                                            console.log 'put err, but no big deal'
+                            if x[0] is "eol_clear"
+                                #console.log 'eol_clear'
+                                if location[0] < rows - 1
+                                    for posj in [location[1]..cols-1]
+                                        for posi in [location[0]..location[0]]
+                                            if posj >= 0
+                                                screen[posi][posj] = ' '
+                                                #qq = ' '
+                                                #linerange = new Range(new Point(posi,posj - 4),new Point(posi,posj - 4 + qq.length))
+                                                #@editor.setTextInBufferRange(linerange,qq)
                                 else if location[0] == rows - 1
-                                    status_bar[location[1]] = v[0]
-                                    location[1] = location[1] + 1
-
+                                    for posj in [location[1]..cols-1]
+                                        status_bar[posj] = ' '
                                 else if location[0] > rows - 1
                                     console.log 'over the max'
 
-                                
-                        if x[0] is "clear"
-                            #console.log 'clear'
-                            for posj in [0..cols-1]
-                                for posi in [0..rows-2]
-                                    screen[posi][posj] = ' '
-                                    #linerange = new Range(new Point(posi,posj),new Point(posi,posj + qq.length))
-                                    #@editor.setTextInBufferRange(linerange,qq)
-                            #status_bar = (' ' for qq in [1..100])
-                            #sbt = status_bar.join('').trim()
-                            #@updateStatusBarWithText(sbt)
 
-                        if x[0] is "eol_clear"
-                            #console.log 'eol_clear'
-                            if location[0] < rows - 1
-                                for posj in [location[1]..cols-1]
-                                    for posi in [location[0]..location[0]]
-                                        if posj >= 0
-                                            screen[posi][posj] = ' '
-                                            #qq = ' '
-                                            #linerange = new Range(new Point(posi,posj - 4),new Point(posi,posj - 4 + qq.length))
-                                            #@editor.setTextInBufferRange(linerange,qq)
-                            else if location[0] == rows - 1
-                                for posj in [location[1]..cols-1]
-                                    status_bar[posj] = ' '
-                            else if location[0] > rows - 1
-                                console.log 'over the max'
+                                    
 
+                        #get top left from screen
+                        if not isNaN(parseInt(screen[0][0..3].join('')))
+                            tlnumber = parseInt(screen[0][0..3].join('')) - 1
+                        console.log 'tlnumber:',tlnumber
+                        lf = []
+                        prev = -1
+                        for posi in [0..rows-2]
+                            cl = parseInt(screen[posi][0..3].join(''))
+                            console.log 'cl:',cl
+                            if isNaN(cl) or cl isnt prev
+                                prev = cl
+                                qq = screen[posi]
+                                #qq = qq[4..].join('')
+                                qq = qq[..].join('')   #this is for debugging
+                                lf.push(qq)
 
-                                
+                        n = lf[lf.length-1].length
+                        qq = lf.join('\n')
+                        linerange = new Range(new Point(tlnumber,0),new Point(tlnumber + rows - 2, n))
+                        @editor.setTextInBufferRange(linerange,qq)
 
-                    #get top left from screen
-                    if not isNaN(parseInt(screen[0][0..3].join('')))
-                        tlnumber = parseInt(screen[0][0..3].join('')) - 1
-                    console.log 'tlnumber:',tlnumber
-                    lf = []
-                    for posi in [0..rows-2]
-                        qq = screen[posi]
-                        #qq = qq[4..].join('')
-                        qq = qq[..].join('')   #this is for debugging
-                        lf.push(qq)
+                        sbt = status_bar.join('').trim()
+                        @updateStatusBarWithText(sbt)
 
-                    n = lf[lf.length-1].length
-                    qq = lf.join('\n')
-                    linerange = new Range(new Point(tlnumber,0),new Point(tlnumber + rows - 2, n))
-                    @editor.setTextInBufferRange(linerange,qq)
+                        #if location[1] >= 4
+                        if cursor_visible and location[0] <= rows - 2
+                            @editor.setCursorBufferPosition(new Point(tlnumber + location[0], location[1]-4),{autoscroll:true})
 
-                    sbt = status_bar.join('').trim()
-                    @updateStatusBarWithText(sbt)
-
-                    #if location[1] >= 4
-                    @editor.setCursorBufferPosition(new Point(tlnumber + location[0], location[1]-4),{autoscroll:cursor_visible})
-
-                collected = collected.slice(i,collected.length)
-                i = 1
-            else
-                #if isNaN(trailing)
-                    #i = i + 1
-                #else
-                if trailing < 0
                     i = i - trailing
+                    console.log 'found message at:',i
+                    collected = collected.slice(i,collected.length)
+                    i = collected.length
+
                 else
-                    i = i + trailing
-          catch err
-              console.log err,i,collected.length
-              console.log 'stack:',err.stack
-              i = i + 1
+                    if isNaN(trailing)
+                        break
+                    else
+                        #if trailing < 0
+                        break
+                        #else
+                            #i = i + trailing
+            catch err
+                console.log err,i,collected.length
+                console.log 'stack:',err.stack
+                break
+        if scrolled
+            @neovim_send_message([0,1,'vim_command',['redraw!']])
+            scrolled = false
 
-
-        #if collected.length == 0
-            #consecutive_unempty_runs = 0
-        #else
-            #consecutive_unempty_runs = consecutive_unempty_runs + 1
-            #console.log 'consecutive_unempty_runs:',consecutive_unempty_runs
-
-        #if consecutive_unempty_runs > 3
-            #collected = new Buffer(0)
     )
 
     rows = 40
@@ -1387,6 +1441,13 @@ class VimState
     @changeModeClass('insert-mode')
     @updateStatusBar()
 
+  activateInvisibleMode: (transactionStarted = false)->
+    @mode = 'insert'
+    @editor.beginTransaction() unless transactionStarted
+    @submode = null
+    @changeModeClass('invisible-mode')
+    @updateStatusBar()
+
 
   # Private: Get the input operator that needs to be told about about the
   # typed undo transaction in a recently completed operation, if there
@@ -1423,7 +1484,7 @@ class VimState
     @updateStatusBar()
 
   changeModeClass: (targetMode) ->
-    for mode in ['command-mode', 'insert-mode', 'visual-mode', 'operator-pending-mode']
+    for mode in ['command-mode', 'insert-mode', 'visual-mode', 'operator-pending-mode', 'invisible-mode']
       if mode is targetMode
         @editorView.addClass(mode)
       else
