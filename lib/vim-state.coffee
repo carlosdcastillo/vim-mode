@@ -7,7 +7,7 @@ map = require './mapped'
 Buffer = require("buffer").Buffer
 MarkerView = require './marker-view'
 
-CONNECT_TO = '/Users/carlos/tmp/neovim562'
+CONNECT_TO = '/Users/carlos/tmp/neovim565'
 MESSAGE_COUNTER = 1
 
 DEBUG = true
@@ -1137,8 +1137,17 @@ class VimState
                 if current_editor.buffer.getLastRow() > parseInt(nLines)
                     for i in [parseInt(nLines)+1..current_editor.buffer.getLastRow()-1]
                         current_editor.buffer.deleteRow(i)
+
+                lines = current_editor.buffer.getLines()
+                pos = 0
+                for item in lines
+                    if item.length > 100
+                        options =  { normalizeLineEndings:false, undo: 'skip' }
+                        current_editor.buffer.setTextInRange(new Range(new Point(pos,100),new Point(pos,item.length)),'',options)
+                    pos = pos + 1
+
+            )
         )
-    )
 
 
 #    @neovim_send_message([0,1,25,["line('w$')"]], (lastLine) =>
