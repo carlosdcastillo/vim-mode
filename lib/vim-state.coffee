@@ -7,9 +7,10 @@ map = require './mapped'
 Buffer = require("buffer").Buffer
 MarkerView = require './marker-view'
 
-CONNECT_TO = '/Users/carlos/tmp/neovim416'
+CONNECT_TO = '/Users/carlos/tmp/neovim562'
 MESSAGE_COUNTER = 1
 
+DEBUG = true
 subscriptions = {}
 subscriptions['redraw'] = false
 socket_subs = null
@@ -19,6 +20,28 @@ tlnumber = 0
 cursor_visible = true
 command_mode = true
 scrolled = false
+scrolled_down = false
+status_bar = []
+location = []
+current_editor = []
+
+range = (start, stop, step) ->
+  if typeof stop is "undefined"
+    
+    # one param defined
+    stop = start
+    start = 0
+  step = 1  if typeof step is "undefined"
+  return []  if (step > 0 and start >= stop) or (step < 0 and start <= stop)
+  result = []
+  i = start
+
+  while (if step > 0 then i < stop else i > stop)
+    result.push i
+    i += step
+  result
+
+
 
 bops_readUInt8 = (target, at) ->
   target[at]
@@ -850,12 +873,11 @@ class VimState
     msg = encode_pub([0,1,'vim_get_api_info',[]])
     socket.write(msg)
     
-    @neovim_subscribe(['redraw:foreground_color','redraw:background_color',
-        'redraw:layout','redraw:cursor','redraw:update_line','redraw:insert_line',
-        'redraw:delete_line','redraw:start','redraw:end','redraw:win_start','redraw:win_end'])
+    #if not subscriptions['redraw']
+    #@neovim_subscribe()
     
-    atom.project.eachBuffer (buffer) =>
-      @registerChangeHandler(buffer)
+    #atom.project.eachBuffer (buffer) =>
+      #@registerChangeHandler(buffer)
 
     @editorView.on 'editor:min-width-changed', @editorSizeChanged
     atom.workspaceView.on 'pane-container:active-pane-item-changed', @activePaneChanged
@@ -863,7 +885,6 @@ class VimState
           if @editorView.hasClass('is-focused')
             q =  String.fromCharCode(e.which)
             console.log "pressed:"+q
-            #@neovim_send_message([0,1,'vim_feedkeys',[q,'command',false]])
             @neovim_send_message([0,1,'vim_input',[q]])
             false
           else
@@ -872,7 +893,6 @@ class VimState
           if @editorView.hasClass('is-focused') and not e.altKey
             translation = @translateCode(e.which, e.shiftKey, e.ctrlKey)
             if translation != ""
-              #@neovim_send_message([0,1,'vim_feedkeys',[translation,'command',false]])
               @neovim_send_message([0,1,'vim_input',[translation]])
               false
           else
@@ -915,10 +935,16 @@ class VimState
 
   activePaneChanged: =>
     try
-        console.log 'active pane changed',atom.workspaceView.getActiveView().getEditor().getUri()
-        @neovim_send_message([0,1,'vim_command',['e! '+atom.workspaceView.getActiveView().getEditor().getUri()]])
-        @afterOpen()
-        @editorView.on 'editor:min-width-changed', @editorSizeChanged
+        if @editor.getUri() is atom.workspaceView.getActiveView().getEditor().getUri()
+            console.log 'active pane changed',atom.workspaceView.getActiveView().getEditor().getUri()
+            @neovim_send_message([0,1,'vim_command',['e! '+atom.workspaceView.getActiveView().getEditor().getUri()]],(x) =>
+                current_editor = @editor
+                tlnumber = 0
+                @afterOpen()
+                @editorView.on 'editor:min-width-changed', @editorSizeChanged
+            )
+        else
+            @destroy_sockets(@editor)
     catch err
         console.log 'problem changing panes'
 
@@ -931,14 +957,12 @@ class VimState
     @neovim_send_message([0,1,'vim_command',['set nu']])
     @neovim_send_message([0,1,'vim_command',['set autochdir']])
     @neovim_send_message([0,1,'vim_command',['set hlsearch']])
-    @neovim_send_message([0,1,'vim_command',['redraw!']])
+    #@neovim_send_message([0,1,'vim_command',['redraw!']])
 
 
     if not subscriptions['redraw']
         console.log 'subscribing, after open'
-        @neovim_subscribe(['redraw:foreground_color','redraw:background_color',
-            'redraw:layout','redraw:cursor','redraw:update_line','redraw:insert_line',
-            'redraw:delete_line','redraw:start','redraw:end','redraw:win_start','redraw:win_end'])
+        @neovim_subscribe()
     #else
         #console.log 'NOT SUBSCRIBING, problem'
         #
@@ -1097,20 +1121,22 @@ class VimState
     #console.log q
 
     @neovim_send_message([0,1,'vim_eval',["expand('%:p')"]], (filename) =>
-      if filename isnt @editor.getUri()
-        atom.workspace.open(filename)
-      else
-        @neovim_send_message([0,1,'vim_eval',["line('$')"]], (nLines) =>
-          if @editor.buffer.getLastRow() < parseInt(nLines)
-            nl = parseInt(nLines) - @editor.buffer.getLastRow()
-            diff = ''
-            for i in [0..nl-1]
-              diff = diff + '\n'
-            @editor.buffer.append(diff, true)
+        console.log 'filename reported by vim:',filename
+        console.log 'current editor uri:',current_editor.getUri()
+        if filename isnt current_editor.getUri()
+            atom.workspace.open(filename)
+        else
+            @neovim_send_message([0,1,'vim_eval',["line('$')"]], (nLines) =>
+                if current_editor.buffer.getLastRow() < parseInt(nLines)
+                    nl = parseInt(nLines) - current_editor.buffer.getLastRow()
+                    diff = ''
+                    for i in [0..nl-1]
+                        diff = diff + '\n'
+                    current_editor.buffer.append(diff, true)
 
-          if @editor.buffer.getLastRow() > parseInt(nLines)
-            for i in [parseInt(nLines)+1..@editor.buffer.getLastRow()-1]
-               @editor.buffer.deleteRow(i)
+                if current_editor.buffer.getLastRow() > parseInt(nLines)
+                    for i in [parseInt(nLines)+1..current_editor.buffer.getLastRow()-1]
+                        current_editor.buffer.deleteRow(i)
         )
     )
 
@@ -1122,13 +1148,73 @@ class VimState
 #    )
 
   editorSizeChanged: =>
-    @height = Math.max(@editorView.getPageRows(),20)
+    @height = 40
     @line0 = 1
-    @neovim_send_message([0,1,'vim_command',['set lines='+@height]])
+    #@neovim_send_message([0,1,'vim_command',['set lines='+@height]])
     console.log 'HEIGHT:',@height
+  
+  redraw_screen:(dirty,rows) =>
+    #get top left from screen
+    console.log 'initial tlnumber',tlnumber
+    tlnumberarr = []
+    for posi in [0..rows-1]
+        try
+            pos = parseInt(screen[posi][0..3].join(''))
+            if not isNaN(pos)
+                tlnumberarr.push (  (pos - 1) - posi  )
+            else
+                tlnumberarr.push -1
+        catch err
+            tlnumberarr.push -1
+    console.log 'tlnumberarr:',tlnumberarr
+
+    if scrolled and scrolled_down
+        tlnumber = tlnumberarr[tlnumberarr.length-2]
+    else if scrolled and not scrolled_down
+        tlnumber = tlnumberarr[0]
+    else
+        tlnumber = tlnumberarr[0]
+
+    for posi in [0..rows-2]
+        qq = screen[posi]
+        pos = parseInt(qq[0..3].join(''))
+        if not isNaN(pos)
+            if (pos-1 == tlnumber + posi) and dirty[posi]
+
+                if not DEBUG
+                    qq = qq[4..].join('')
+                else
+                    qq = qq[..].join('')   #this is for debugging
+
+                console.log 'qq:',qq
+
+                linerange = new Range(new Point(tlnumber+posi,0),new Point(tlnumber + posi, qq.length))
+                options =  { normalizeLineEndings:false, undo: 'skip' }
+                current_editor.buffer.setTextInRange(linerange, qq, options)
+                console.log 'printing line:',posi
+
+                dirty[posi] = false
+            #else
+                #console.log 'comparison:',parseInt(qq[0..3].join('')) ,tlnumber + posi
 
 
-  neovim_subscribe:(events) =>
+    #n = lf[lf.length-1].length
+    #qq = lf.join('\n')
+
+    sbt = status_bar.join('').trim()
+    @updateStatusBarWithText(sbt)
+
+    #if location[1] >= 4
+    if cursor_visible and location[0] <= rows - 2
+        if not DEBUG
+            current_editor.setCursorBufferPosition(new Point(tlnumber + location[0], location[1]-4),{autoscroll:true})
+        else
+            current_editor.setCursorBufferPosition(new Point(tlnumber + location[0], location[1]),{autoscroll:true})
+
+    return dirty
+
+
+  neovim_subscribe: =>
     console.log 'neovim_subscribe'
     if socket_subs == null
         socket_subs = new net.Socket()
@@ -1140,6 +1226,7 @@ class VimState
     )
 
     socket_subs.on('data', (data) =>
+        dirty = (false for i in [0..rows-2])
         collected = Buffer.concat([collected, data])
         i = collected.length
         #if (collected.length % 8192 isnt 0) or (collected.length < 8192)
@@ -1160,10 +1247,12 @@ class VimState
                                     location[1] = parseInt(v[1])
 
                             if x[0] is 'set_scroll_region'
-                                screen_top = parseInt(x[1])
-                                screen_bot = parseInt(x[2])
-                                screen_left = parseInt(x[3])
-                                screen_right = parseInt(x[4])
+                                #console.log x
+                                screen_top = parseInt(x[1][0])
+                                screen_bot = parseInt(x[1][1])
+                                screen_left = parseInt(x[1][2])
+                                screen_right = parseInt(x[1][3])
+                                #console.log "set_scroll_region",screen_top,screen_bot,screen_left,screen_right
 
                             if x[0] is "insert_mode"
                                 @activateInsertMode()
@@ -1172,6 +1261,9 @@ class VimState
                             if x[0] is "normal_mode"
                                 @activateCommandMode()
                                 command_mode = true
+
+                            if x[0] is "bell"
+                                atom.beep()
 
                             if x[0] is "cursor_on"
                                 if command_mode
@@ -1193,8 +1285,8 @@ class VimState
                                     right = screen_right + 1
 
                                     count = parseInt(v[0])
-                                    console.log 'scrolling:',count
-                                    tlnumber = tlnumber + count
+                                    #console.log 'scrolling:',count
+                                    #tlnumber = tlnumber + count
                                     if count > 0
                                         src_top = top+count
                                         src_bot = bot
@@ -1203,10 +1295,6 @@ class VimState
                                         clr_top = dst_bot
                                         clr_bot = src_bot
 
-                                        #down
-                                        #screen = screen[count..]
-                                        #for posi in [0..count-1]
-                                            #screen.push((' ' for qq in [1..cols]))
                                     else
                                         src_top = top
                                         src_bot = bot + count
@@ -1215,22 +1303,15 @@ class VimState
                                         clr_top = src_top
                                         clr_bot = dst_top
 
-                                        #count = -count
-                                        #screen2 = []
-                                        #for posi in [0..count-1]
-                                            #screen2.push((' ' for qq in [1..cols]))
-                                        #for item in screen[0..screen.length-1-count]
-                                            #screen2.push(item)
-                                        #screen = screen2
-                                    #console.log 'screen:',screen
-                                    for posi in [clr_top..clr_bot-1]
-                                        for posj in  [left..right-1]
-                                            screen[i][j] = ' '
+                                    #for posi in range(clr_top,clr_bot)
+                                        #for posj in range(left,right)
+                                            #screen[posi][posj] = ' '
 
                                     top = screen_top
                                     bottom = screen_bot
                                     left = screen_left
                                     right = screen_right
+                                    #console.log 'left:',left
                                     if count > 0
                                         start = top
                                         stop = bottom - count + 1
@@ -1240,18 +1321,23 @@ class VimState
                                         stop = top - count + 1
                                         step = -1
 
-                                    for row in [start..stop-1] by step
+                                    for row in range(start,stop,step)
+
+                                        dirty[row] = true
                                         target_row = screen[row]
                                         source_row = screen[row + count]
-                                        for col in [left..right]
-                                            tgt = target_row[col]
-                                            source_row[col] = tgt
+                                        for col in range(left,right+1)
+                                            target_row[col] = source_row[col]
 
-                                    for row in [stop..stop+count] by step
-                                        for col in [left..right]
+                                    for row in  range(stop, stop+count,step)
+                                        for col in  range(left,right+1)
                                             screen[row][col] = ' '
 
                                     scrolled = true
+                                    if count > 0
+                                        scrolled_down = true
+                                    else
+                                        scrolled_down = false
                                         
 
                             if x[0] is "put"
@@ -1261,8 +1347,9 @@ class VimState
                                         if location[1]>=0 and location[1]<100
                                             try
                                                 qq = v[0]
-                                                screen[location[0]][location[1]] = qq
-                                                location[1] = location[1] + qq.length
+                                                screen[location[0]][location[1]] = qq[0]
+                                                location[1] = location[1] + 1
+                                                dirty[location[0]] = true
                                             catch  puterr
                                                 console.log 'put err, but no big deal'
                                     else if location[0] == rows - 1
@@ -1278,11 +1365,7 @@ class VimState
                                 for posj in [0..cols-1]
                                     for posi in [0..rows-2]
                                         screen[posi][posj] = ' '
-                                        #linerange = new Range(new Point(posi,posj),new Point(posi,posj + qq.length))
-                                        #@editor.setTextInBufferRange(linerange,qq)
-                                #status_bar = (' ' for qq in [1..100])
-                                #sbt = status_bar.join('').trim()
-                                #@updateStatusBarWithText(sbt)
+                                        dirty[posi] = true
 
                             if x[0] is "eol_clear"
                                 #console.log 'eol_clear'
@@ -1290,71 +1373,44 @@ class VimState
                                     for posj in [location[1]..cols-1]
                                         for posi in [location[0]..location[0]]
                                             if posj >= 0
+                                                dirty[posi] = true
                                                 screen[posi][posj] = ' '
-                                                #qq = ' '
-                                                #linerange = new Range(new Point(posi,posj - 4),new Point(posi,posj - 4 + qq.length))
-                                                #@editor.setTextInBufferRange(linerange,qq)
+
                                 else if location[0] == rows - 1
                                     for posj in [location[1]..cols-1]
                                         status_bar[posj] = ' '
                                 else if location[0] > rows - 1
                                     console.log 'over the max'
 
-
-                                    
-
-                        #get top left from screen
-                        if not isNaN(parseInt(screen[0][0..3].join('')))
-                            tlnumber = parseInt(screen[0][0..3].join('')) - 1
-                        console.log 'tlnumber:',tlnumber
-                        lf = []
-                        prev = -1
-                        for posi in [0..rows-2]
-                            cl = parseInt(screen[posi][0..3].join(''))
-                            console.log 'cl:',cl
-                            if isNaN(cl) or cl isnt prev
-                                prev = cl
-                                qq = screen[posi]
-                                #qq = qq[4..].join('')
-                                qq = qq[..].join('')   #this is for debugging
-                                lf.push(qq)
-
-                        n = lf[lf.length-1].length
-                        qq = lf.join('\n')
-                        linerange = new Range(new Point(tlnumber,0),new Point(tlnumber + rows - 2, n))
-                        @editor.setTextInBufferRange(linerange,qq)
-
-                        sbt = status_bar.join('').trim()
-                        @updateStatusBarWithText(sbt)
-
-                        #if location[1] >= 4
-                        if cursor_visible and location[0] <= rows - 2
-                            @editor.setCursorBufferPosition(new Point(tlnumber + location[0], location[1]-4),{autoscroll:true})
+                    dirty = @redraw_screen(dirty,rows)
 
                     i = i - trailing
                     console.log 'found message at:',i
                     collected = collected.slice(i,collected.length)
                     i = collected.length
 
+                    
                 else
-                    if isNaN(trailing)
-                        break
-                    else
-                        #if trailing < 0
-                        break
-                        #else
-                            #i = i + trailing
+
+                    @redraw_screen(dirty,rows)
+                    break
+
+
+                
             catch err
                 console.log err,i,collected.length
                 console.log 'stack:',err.stack
+                @redraw_screen(dirty,rows)
                 break
         if scrolled
-            @neovim_send_message([0,1,'vim_command',['redraw!']])
+            #@neovim_send_message([0,1,'vim_command',['redraw!']])
             scrolled = false
+        @ns_redraw_win_end([])
+        #@redrawScreen(dirty,rows)
 
     )
 
-    rows = 40
+    rows = 20
     cols = 100
     message = [0,1,'ui_attach',[cols,rows]]
     #rows = @editor.getScreenLineCount()
@@ -1418,11 +1474,15 @@ class VimState
   # Returns nothing.
   activateCommandMode: ->
     @mode = 'command'
+    #try
+        #@editor.commitTransaction()
+    #catch err
+        #console.log 'cannot commit transaction'
     @submode = null
 
-    if @editorView.is(".insert-mode")
-      cursor = @editor.getCursor()
-      cursor.moveLeft() unless cursor.isAtBeginningOfLine()
+    #if @editorView.is(".insert-mode")
+      #cursor = @editor.getCursor()
+      #cursor.moveLeft() unless cursor.isAtBeginningOfLine()
 
     @changeModeClass('command-mode')
 
@@ -1436,14 +1496,14 @@ class VimState
   # Returns nothing.
   activateInsertMode: (transactionStarted = false)->
     @mode = 'insert'
-    @editor.beginTransaction() unless transactionStarted
+    #@editor.beginTransaction() unless transactionStarted
     @submode = null
     @changeModeClass('insert-mode')
     @updateStatusBar()
 
   activateInvisibleMode: (transactionStarted = false)->
     @mode = 'insert'
-    @editor.beginTransaction() unless transactionStarted
+    #@editor.beginTransaction() unless transactionStarted
     @submode = null
     @changeModeClass('invisible-mode')
     @updateStatusBar()
