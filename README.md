@@ -10,7 +10,7 @@ To use this you will need to install neovim from @tarruda's abstract-ui-fixes
 branch. The last commit should be: 
 
 commit b430078047256810fed734661b8b2bf2e4c32977
-Author: Thiago de Arruda <tpadilha84@gmail.com>
+Author: Thiago de Arruda 
 Date:   Fri Jan 2 21:16:18 2015 -0300
 
     runtime: Fix plugin/matchparen.vim for abstract_ui
