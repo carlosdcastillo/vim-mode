@@ -23,7 +23,8 @@ scrolled = false
 scrolled_down = false
 status_bar = []
 location = []
-current_editor = []
+current_editor = undefined
+editor_views = {}
 
 range = (start, stop, step) ->
   if typeof stop is "undefined"
@@ -819,18 +820,23 @@ class VimState
 
   constructor: (@editorView) ->
     @editor = @editorView.editor
+    editor_views[@editor.getUri()] = @editorView
+    console.log 'editor uri:',@editor.getUri()
     @opStack = []
     @history = []
     @marks = {}
     params = {}
-    params.manager = this;
-    params.id = 0;
+    params.manager = this
+    params.id = 0
     @area = new HighlightedAreaView(@editorView)
     @area.attach()
     @linelen = 5
 
+    if not current_editor
+        current_editor = @editor
     @changeModeClass('command-mode')
     @activateCommandMode()
+
 
     #@setupCommandMode()
     #@registerInsertIntercept()
@@ -1553,11 +1559,13 @@ class VimState
     @updateStatusBar()
 
   changeModeClass: (targetMode) ->
+    console.log 'query time:',current_editor.getUri()
+    editorview = editor_views[current_editor.getUri()]
     for mode in ['command-mode', 'insert-mode', 'visual-mode', 'operator-pending-mode', 'invisible-mode']
       if mode is targetMode
-        @editorView.addClass(mode)
+        editorview.addClass(mode)
       else
-        @editorView.removeClass(mode)
+        editorview.removeClass(mode)
 
   updateStatusBarWithText:(text) ->
     if !$('#status-bar-vim-mode').length
