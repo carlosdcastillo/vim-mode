@@ -4,16 +4,23 @@ This is a work in progress branch that shows how to make Atom talk to Neovim.
 
 # What's new?
 
-I've updated it to use the abstract-ui branch, it no longer uses the redraw-events patch.
+ I've updated it to use the abstract-ui branch, it no longer uses the redraw-events patch.
 
 To use this you will need to install neovim from @tarruda's abstract-ui-fixes
 branch. The last commit should be: 
 
-commit b430078047256810fed734661b8b2bf2e4c32977
-Author: Thiago de Arruda 
-Date:   Fri Jan 2 21:16:18 2015 -0300
+    commit b430078047256810fed734661b8b2bf2e4c32977
+    Author: Thiago de Arruda 
+    Date:   Fri Jan 2 21:16:18 2015 -0300
 
     runtime: Fix plugin/matchparen.vim for abstract_ui
+
+# How do you run this?
+
+NVIM_LISTEN_ADDRESS=/path/to/listen/address /path/to/nvim
+
+Then you will need to configure the value of CONNECT_TO in line 11 of vim-state.coffee to
+/path/to/listen/address
 
 # What do you want to do with this?
 

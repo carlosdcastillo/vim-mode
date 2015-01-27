@@ -7,9 +7,11 @@
   "private": true,
   "repository": "https://github.com/carlosdcastillo/vim-mode",
   "engines": {
-    "atom": ">0.99.0"
+    "atom": ">0.174.0"
   },
   "dependencies": {
-    "underscore-plus": "1.x"
+    "underscore-plus": "1.x",
+    "atom-space-pen-views":"^2.0.3",
+    "jquery":"^2"
   }
 }

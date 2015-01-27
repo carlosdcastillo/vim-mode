@@ -1,13 +1,13 @@
 _ = require 'underscore-plus'
-{$} = require 'atom'
-{$$, Point, Range} = require 'atom'
+$ = require  'jquery'
+{Point, Range} = require 'atom'
 Marker = require 'atom'
 net = require 'net'
 map = require './mapped'
 Buffer = require("buffer").Buffer
 MarkerView = require './marker-view'
 
-CONNECT_TO = '/Users/carlos/tmp/neovim565'
+CONNECT_TO = '/Users/carlos/tmp/neovim573'
 MESSAGE_COUNTER = 1
 
 DEBUG = true
@@ -25,10 +25,11 @@ status_bar = []
 location = []
 current_editor = undefined
 editor_views = {}
+element = document.createElement("item-view")
 
 range = (start, stop, step) ->
   if typeof stop is "undefined"
-    
+
     # one param defined
     stop = start
     start = 0
@@ -819,17 +820,21 @@ class VimState
   submode: null
 
   constructor: (@editorView) ->
-    @editor = @editorView.editor
-    editor_views[@editor.getUri()] = @editorView
-    console.log 'editor uri:',@editor.getUri()
+    @editor = @editorView.getModel()
+    editor_views[@editor.getURI()] = @editorView
+    console.log '*****************************************editor uri:',@editor.getURI()
     @opStack = []
     @history = []
     @marks = {}
     params = {}
     params.manager = this
     params.id = 0
-    @area = new HighlightedAreaView(@editorView)
-    @area.attach()
+    @mode = 'command'
+    #
+    #
+    #@area = new HighlightedAreaView(@editorView)
+    #@area.attach()
+    #
     @linelen = 5
 
     if not current_editor
@@ -837,6 +842,10 @@ class VimState
     @changeModeClass('command-mode')
     @activateCommandMode()
 
+
+    atom.packages.once 'activated', ->
+        element.innerHTML = ''
+        @statusbar = document.querySelector('status-bar').addLeftTile(item:element,priority:10 )
 
     #@setupCommandMode()
     #@registerInsertIntercept()
@@ -847,17 +856,17 @@ class VimState
     #  @activateCommandMode()
 
 
-    atom.workspaceView.on 'focusout', ".editor:not(.mini)", (event) =>
-      editor = $(event.target).closest('.editor').view()?.getModel()
-      @destroy_sockets(editor)
+#    atom.workspaceView.on 'focusout', ".editor:not(.mini)", (event) =>
+#      editor = $(event.target).closest('.editor').view()?.getModel()
+#      @destroy_sockets(editor)
 
-    atom.workspaceView.on 'pane:before-item-destroyed', (event, paneItem) =>
-      @destroy_sockets(paneItem)
+#    atom.workspaceView.on 'pane:before-item-destroyed', (event, paneItem) =>
+#      @destroy_sockets(paneItem)
 
-    $(window).preempt 'beforeunload', =>
-      for pane in atom.workspaceView.getPanes()
-        @destroy_sockets(paneItem) for paneItem in pane.getItems()
-        
+#    $(window).preempt 'beforeunload', =>
+#      for pane in atom.workspaceView.getPanes()
+#        @destroy_sockets(paneItem) for paneItem in pane.getItems()
+
     @height = 100
     @line0 = 1
 
@@ -878,31 +887,37 @@ class VimState
     )
     msg = encode_pub([0,1,'vim_get_api_info',[]])
     socket.write(msg)
-    
+
     #if not subscriptions['redraw']
     #@neovim_subscribe()
-    
+
     #atom.project.eachBuffer (buffer) =>
       #@registerChangeHandler(buffer)
 
-    @editorView.on 'editor:min-width-changed', @editorSizeChanged
-    atom.workspaceView.on 'pane-container:active-pane-item-changed', @activePaneChanged
-    @editorView.on "keypress.chalcogen", (e) =>
-          if @editorView.hasClass('is-focused')
+    #@editorView.on 'editor:min-width-changed', @editorSizeChanged
+    #
+    #atom.workspaceView.on 'pane-container:active-pane-item-changed', @activePaneChanged
+    atom.workspace.onDidChangeActivePaneItem @activePaneChanged
+    @editorView.component.setInputEnabled(false)
+
+    @editorView.onkeypress = (e) =>
+        if @editorView.classList.contains('is-focused')
             q =  String.fromCharCode(e.which)
             console.log "pressed:"+q
             @neovim_send_message([0,1,'vim_input',[q]])
             false
-          else
+        else
             true
-    @editorView.on "keydown", (e) =>
-          if @editorView.hasClass('is-focused') and not e.altKey
+
+    @editorView.onkeydown = (e) =>
+        if @editorView.classList.contains('is-focused') and not e.altKey
             translation = @translateCode(e.which, e.shiftKey, e.ctrlKey)
             if translation != ""
-              @neovim_send_message([0,1,'vim_input',[translation]])
-              false
-          else
+                @neovim_send_message([0,1,'vim_input',[translation]])
+                false
+        else
             true
+
   translateCode: (code, shift, control) ->
     if control && code>=65 && code<=90
       String.fromCharCode(code-64)
@@ -920,7 +935,7 @@ class VimState
       ""
   destroy_sockets:(editor) =>
     if subscriptions['redraw']
-        if editor.getUri() != @editor.getUri()
+        if editor.getURI() != @editor.getURI()
             #subscriptions['redraw'] = false
 
             console.log 'unsubscribing'
@@ -941,16 +956,20 @@ class VimState
 
   activePaneChanged: =>
     try
-        if @editor.getUri() is atom.workspaceView.getActiveView().getEditor().getUri()
-            console.log 'active pane changed',atom.workspaceView.getActiveView().getEditor().getUri()
-            @neovim_send_message([0,1,'vim_command',['e! '+atom.workspaceView.getActiveView().getEditor().getUri()]],(x) =>
-                current_editor = @editor
+        #if @editor.getURI() is atom.workspaceView.getActiveView().getEditor().getURI()
+            console.log 'active pane changed',atom.workspace.getActiveTextEditor().getURI()
+            @neovim_send_message([0,1,'vim_command',['e! '+atom.workspace.getActiveTextEditor().getURI()]],(x) =>
+                current_editor = atom.workspace.getActiveTextEditor()
+                #@editor
                 tlnumber = 0
                 @afterOpen()
-                @editorView.on 'editor:min-width-changed', @editorSizeChanged
+                #@editorView.on 'editor:min-width-changed', @editorSizeChanged
             )
-        else
-            @destroy_sockets(@editor)
+        #else
+            #console.log 'active pane changed',atom.workspaceView.getActiveView().getEditor().getURI()
+            #console.log '@editor.geturi',@editor.getURI()
+
+            #@destroy_sockets(@editor)
     catch err
         console.log 'problem changing panes'
 
@@ -1035,7 +1054,7 @@ class VimState
 
         if currenttext isnt qlinecontents and subscriptions['redraw:update_line']
           @neovim_send_message([0,1,'vim_eval',["expand('%:p')"]], (filename) =>
-            if filename == @editor.getUri()
+            if filename == @editor.getURI()
               @editor.setTextInBufferRange(linerange,qlinecontents)
           )
             # console.log 'setting text in:'+qrow
@@ -1128,9 +1147,10 @@ class VimState
 
     @neovim_send_message([0,1,'vim_eval',["expand('%:p')"]], (filename) =>
         console.log 'filename reported by vim:',filename
-        console.log 'current editor uri:',current_editor.getUri()
-        if filename isnt current_editor.getUri()
-            atom.workspace.open(filename)
+        console.log 'current editor uri:',current_editor.getURI()
+        if filename isnt current_editor.getURI()
+            console.log 'trying to open using atom'
+            #atom.workspace.open(filename)
         else
             @neovim_send_message([0,1,'vim_eval',["line('$')"]], (nLines) =>
                 if current_editor.buffer.getLastRow() < parseInt(nLines)
@@ -1167,7 +1187,7 @@ class VimState
     @line0 = 1
     #@neovim_send_message([0,1,'vim_command',['set lines='+@height]])
     console.log 'HEIGHT:',@height
-  
+
   redraw_screen:(dirty,rows) =>
     #get top left from screen
     console.log 'initial tlnumber',tlnumber
@@ -1353,7 +1373,7 @@ class VimState
                                         scrolled_down = true
                                     else
                                         scrolled_down = false
-                                        
+
 
                             if x[0] is "put"
                                 cnt = 0
@@ -1374,7 +1394,7 @@ class VimState
                                     else if location[0] > rows - 1
                                         console.log 'over the max'
 
-                                    
+
                             if x[0] is "clear"
                                 #console.log 'clear'
                                 for posj in [0..cols-1]
@@ -1404,14 +1424,14 @@ class VimState
                     collected = collected.slice(i,collected.length)
                     i = collected.length
 
-                    
+
                 else
 
                     @redraw_screen(dirty,rows)
                     break
 
 
-                
+
             catch err
                 console.log err,i,collected.length
                 console.log 'stack:',err.stack
@@ -1559,29 +1579,18 @@ class VimState
     @updateStatusBar()
 
   changeModeClass: (targetMode) ->
-    console.log 'query time:',current_editor.getUri()
-    editorview = editor_views[current_editor.getUri()]
+    console.log 'query time:',current_editor.getURI()
+    console.log 'editor_views:',editor_views
+    editorview = editor_views[current_editor.getURI()]
     for mode in ['command-mode', 'insert-mode', 'visual-mode', 'operator-pending-mode', 'invisible-mode']
-      if mode is targetMode
-        editorview.addClass(mode)
-      else
-        editorview.removeClass(mode)
+        if mode is targetMode
+            editorview.classList.add(mode)
+        else
+            editorview.classList.remove(mode)
 
   updateStatusBarWithText:(text) ->
-    if !$('#status-bar-vim-mode').length
-      atom.packages.once 'activated', ->
-        atom.workspaceView.statusBar?.prependRight("<div id='status-bar-vim-mode' class='inline-block'>Command</div>")
-
-    $('#status-bar-vim-mode').html(text)
+    element.innerHTML = text
 
   updateStatusBar: ->
-    if !$('#status-bar-vim-mode').length
-      atom.packages.once 'activated', ->
-        atom.workspaceView.statusBar?.prependRight("<div id='status-bar-vim-mode' class='inline-block'>Command</div>")
+    element.innerHTML = @mode
 
-    if @mode is "insert"
-      $('#status-bar-vim-mode').html("Insert")
-    else if @mode is "command"
-      $('#status-bar-vim-mode').html("Command")
-    else if @mode is "visual"
-      $('#status-bar-vim-mode').html("Visual")
