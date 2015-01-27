@@ -1,4 +1,4 @@
-{$} = require 'atom'
+{$} = require 'jquery'
 
 module.exports =
 class MarkerView

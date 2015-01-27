@@ -1,4 +1,6 @@
-{$,$$,EditorView, View, Range} = require 'atom'
+{$} = require 'jquery'
+{EditorView, View} = require 'atom-space-pen-views'
+{Range} = require 'atom'
 
 _ = require 'underscore-plus'
 
