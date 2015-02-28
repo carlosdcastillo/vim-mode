@@ -1,6 +1,18 @@
 @import "syntax-variables";
 @import "ui-variables";
 
+.command-mode-input atom-text-editor[mini] {
+  background-color: inherit;
+  border: none;
+  width: 100%;
+  font-weight: normal;
+  color: @text-color;
+  line-height: 1.28;
+  cursor: default;
+  white-space: nowrap;
+  padding-left: 10px;
+}
+
 .block-cursor(@visibility: visible) {
   border: 0;
   background-color: @syntax-cursor-color;
@@ -8,51 +20,39 @@
   opacity: 0.5;
 }
 
-.vim-mode.command-mode, .vim-mode.operator-pending-mode, .vim-mode.visual-mode {
-  .cursor, .cursor.blink-off {
-    .block-cursor(hidden);
+atom-text-editor.vim-mode.command-mode,
+atom-text-editor.vim-mode.operator-pending-mode,
+atom-text-editor.vim-mode.visual-mode,
+{
+  &::shadow, // shadow-DOM enabled
+  &           // shadow-DOM disabled
+  {
+    .cursor, .cursor.blink-off {
+      .block-cursor(hidden);
+    }
   }
+}
 
-  &.editor.is-focused {
+atom-text-editor.vim-mode.command-mode.is-focused,
+atom-text-editor.vim-mode.operator-pending-mode.is-focused,
+atom-text-editor.vim-mode.visual-mode.is-focused
+{
+  &::shadow, // shadow-DOM enabled
+  &           // shadow-DOM disabled
+  {
     .cursor, .cursor.blink-off {
       .block-cursor;
     }
   }
 }
 
-.vim-mode.invisible-mode {
-  .cursor, .cursor.blink-off {
-    .block-cursor(hidden);
-    width: 0;
+atom-text-editor.vim-mode.visual-mode
+{
+  &::shadow, // shadow-DOM enabled
+  &           // shadow-DOM disabled
+  {
+    .cursor.hidden-cursor {
+      display: block;
+    }
   }
-}
-
-.vim-mode.visual-mode {
-  .cursor.hidden-cursor {
-    display: block;
-  }
-}
-
-.command-mode-input .editor.mini {
-  background-color: inherit;
-  border: none;
-  width: 100%;
-  font-weight: normal;
-  color: @text-color;
-  // see also the commandModeInputViewFontSize setting.
-  line-height: 1.28;
-  cursor: default;
-  white-space: nowrap;
-  padding-left: 10px;
-}
-
-.command-mode-input .hidden-input {
-  padding: 0;
-  border: 0;
-  position: absolute;
-  z-index: -1;
-  top: 0;
-  left: 0;
-  opacity: 0;
-  width: 1px;
 }
