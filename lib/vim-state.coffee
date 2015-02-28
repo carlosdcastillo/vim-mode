@@ -7,7 +7,7 @@ map = require './mapped'
 Buffer = require("buffer").Buffer
 MarkerView = require './marker-view'
 
-CONNECT_TO = '/Users/carlos/tmp/neovim573'
+CONNECT_TO = '/Users/carlos/tmp/neovim577'
 MESSAGE_COUNTER = 1
 
 DEBUG = true
@@ -982,7 +982,10 @@ class VimState
     @neovim_send_message([0,1,'vim_command',['set nu']])
     @neovim_send_message([0,1,'vim_command',['set autochdir']])
     @neovim_send_message([0,1,'vim_command',['set hlsearch']])
-    #@neovim_send_message([0,1,'vim_command',['redraw!']])
+    @neovim_send_message([0,1,'vim_command',['set tabstop=4']])
+    @neovim_send_message([0,1,'vim_command',['set shiftwidth=4']])
+    @neovim_send_message([0,1,'vim_command',['set expandtab']])
+    @neovim_send_message([0,1,'vim_command',['redraw!']])
 
 
     if not subscriptions['redraw']
@@ -1271,7 +1274,7 @@ class VimState
                 v = collected.slice(0,i)
                 {value:q,trailing} = decode_pub(to_uint8array(v))
                 if trailing >= 0
-                    #console.log 'subscribe',q
+                    console.log 'subscribe',q
                     [bufferId, eventName, eventInfo] = q
                     if eventName is "redraw"
                         #console.log "eventInfo", eventInfo
@@ -1377,6 +1380,7 @@ class VimState
 
                             if x[0] is "put"
                                 cnt = 0
+                                console.log 'put:',x[1..]
                                 for v in x[1..]
                                     if 0<=location[0] and location[0] < rows-1
                                         if location[1]>=0 and location[1]<100
@@ -1438,7 +1442,7 @@ class VimState
                 @redraw_screen(dirty,rows)
                 break
         if scrolled
-            #@neovim_send_message([0,1,'vim_command',['redraw!']])
+            @neovim_send_message([0,1,'vim_command',['redraw!']])
             scrolled = false
         @ns_redraw_win_end([])
         #@redrawScreen(dirty,rows)
@@ -1447,7 +1451,7 @@ class VimState
 
     rows = 20
     cols = 100
-    message = [0,1,'ui_attach',[cols,rows]]
+    message = [0,1,'ui_attach',[cols,rows,true]]
     #rows = @editor.getScreenLineCount()
     location = [0,0]
     status_bar = (' ' for ux in [1..cols])
