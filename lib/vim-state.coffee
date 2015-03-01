@@ -964,7 +964,7 @@ class VimState
 
         #if @editor.getURI() is atom.workspaceView.getActiveView().getEditor().getURI()
             #console.log 'active pane changed',atom.workspace.getActiveTextEditor().getURI()
-            @neovim_send_message([0,1,'vim_command',['e! '+atom.workspace.getActiveTextEditor().getURI()]],(x) =>
+            @neovim_send_message([0,1,'vim_command',['e '+atom.workspace.getActiveTextEditor().getURI()]],(x) =>
                 current_editor = atom.workspace.getActiveTextEditor()
                 #@editor
                 tlnumber = 0
@@ -991,6 +991,7 @@ class VimState
     @neovim_send_message([0,1,'vim_command',['set tabstop=4']])
     @neovim_send_message([0,1,'vim_command',['set shiftwidth=4']])
     @neovim_send_message([0,1,'vim_command',['set expandtab']])
+    @neovim_send_message([0,1,'vim_command',['set hidden']])
     @neovim_send_message([0,1,'vim_command',['redraw!']])
 
 
