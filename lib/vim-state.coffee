@@ -927,13 +927,14 @@ class VimState
     else if code>=8 && code<=10 || code==13 || code==27
       String.fromCharCode(code)
     else if code==37
-      String.fromCharCode(27)+'[D'
+      '<left>'
     else if code==38
-      String.fromCharCode(27)+'[A'
+      '<up>'
     else if code==39
-      String.fromCharCode(27)+'[C'
+      '<right>'
     else if code==40
-      String.fromCharCode(27)+'[B'
+      '<down>'
+      #String.fromCharCode(27)+'[B'
     else if code==188
       '<lt>'
     else
@@ -1160,7 +1161,7 @@ class VimState
         #console.log 'current editor uri:',current_editor.getURI()
         if filename isnt current_editor.getURI()
             console.log 'trying to open using atom'
-            #atom.workspace.open(filename)
+            atom.workspace.open(filename)
         else
             @neovim_send_message([0,1,'vim_eval',["line('$')"]], (nLines) =>
                 if current_editor.buffer.getLastRow() < parseInt(nLines)
