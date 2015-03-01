@@ -822,13 +822,14 @@ class VimState
   constructor: (@editorView) ->
     @editor = @editorView.getModel()
     editor_views[@editor.getURI()] = @editorView
-    console.log '*****************************************editor uri:',@editor.getURI()
+    #console.log '*****************************************editor uri:',@editor.getURI()
     @opStack = []
     @history = []
     @marks = {}
     params = {}
     params.manager = this
     params.id = 0
+    @editorView.component.setInputEnabled(false);
     @mode = 'command'
     #
     #
@@ -878,10 +879,10 @@ class VimState
 
     socket.on('data', (data) =>
         {value:q,trailing} = decode_pub(to_uint8array(data))
-        console.log q
-        console.log trailing
+        #console.log q
+        #console.log trailing
         qq = q[3][1]
-        console.log 'data:',qq
+        #console.log 'data:',qq
         socket.end()
         socket.destroy()
     )
@@ -898,12 +899,12 @@ class VimState
     #
     #atom.workspaceView.on 'pane-container:active-pane-item-changed', @activePaneChanged
     atom.workspace.onDidChangeActivePaneItem @activePaneChanged
-    @editorView.component.setInputEnabled(false)
 
     @editorView.onkeypress = (e) =>
         if @editorView.classList.contains('is-focused')
             q =  String.fromCharCode(e.which)
             console.log "pressed:"+q
+            q = q.replace '\<', '<lt>'
             @neovim_send_message([0,1,'vim_input',[q]])
             false
         else
@@ -912,6 +913,7 @@ class VimState
     @editorView.onkeydown = (e) =>
         if @editorView.classList.contains('is-focused') and not e.altKey
             translation = @translateCode(e.which, e.shiftKey, e.ctrlKey)
+            console.log "pressed down:",translation
             if translation != ""
                 @neovim_send_message([0,1,'vim_input',[translation]])
                 false
@@ -919,6 +921,7 @@ class VimState
             true
 
   translateCode: (code, shift, control) ->
+    console.log code
     if control && code>=65 && code<=90
       String.fromCharCode(code-64)
     else if code>=8 && code<=10 || code==13 || code==27
@@ -931,6 +934,8 @@ class VimState
       String.fromCharCode(27)+'[C'
     else if code==40
       String.fromCharCode(27)+'[B'
+    else if code==188
+      '<lt>'
     else
       ""
   destroy_sockets:(editor) =>
@@ -956,8 +961,9 @@ class VimState
 
   activePaneChanged: =>
     try
+
         #if @editor.getURI() is atom.workspaceView.getActiveView().getEditor().getURI()
-            console.log 'active pane changed',atom.workspace.getActiveTextEditor().getURI()
+            #console.log 'active pane changed',atom.workspace.getActiveTextEditor().getURI()
             @neovim_send_message([0,1,'vim_command',['e! '+atom.workspace.getActiveTextEditor().getURI()]],(x) =>
                 current_editor = atom.workspace.getActiveTextEditor()
                 #@editor
@@ -975,7 +981,7 @@ class VimState
 
   afterOpen: =>
 
-    console.log 'in after open'
+    #console.log 'in after open'
     @neovim_send_message([0,1,'vim_command',['set scrolloff=5']])
     @neovim_send_message([0,1,'vim_command',['set noswapfile']])
     @neovim_send_message([0,1,'vim_command',['set nowrap']])
@@ -989,7 +995,7 @@ class VimState
 
 
     if not subscriptions['redraw']
-        console.log 'subscribing, after open'
+        #console.log 'subscribing, after open'
         @neovim_subscribe()
     #else
         #console.log 'NOT SUBSCRIBING, problem'
@@ -1149,8 +1155,8 @@ class VimState
     #console.log q
 
     @neovim_send_message([0,1,'vim_eval',["expand('%:p')"]], (filename) =>
-        console.log 'filename reported by vim:',filename
-        console.log 'current editor uri:',current_editor.getURI()
+        #console.log 'filename reported by vim:',filename
+        #console.log 'current editor uri:',current_editor.getURI()
         if filename isnt current_editor.getURI()
             console.log 'trying to open using atom'
             #atom.workspace.open(filename)
@@ -1189,11 +1195,11 @@ class VimState
     @height = 40
     @line0 = 1
     #@neovim_send_message([0,1,'vim_command',['set lines='+@height]])
-    console.log 'HEIGHT:',@height
+    #console.log 'HEIGHT:',@height
 
   redraw_screen:(dirty,rows) =>
     #get top left from screen
-    console.log 'initial tlnumber',tlnumber
+    #console.log 'initial tlnumber',tlnumber
     tlnumberarr = []
     for posi in [0..rows-1]
         try
@@ -1204,7 +1210,7 @@ class VimState
                 tlnumberarr.push -1
         catch err
             tlnumberarr.push -1
-    console.log 'tlnumberarr:',tlnumberarr
+    #console.log 'tlnumberarr:',tlnumberarr
 
     if scrolled and scrolled_down
         tlnumber = tlnumberarr[tlnumberarr.length-2]
@@ -1224,12 +1230,12 @@ class VimState
                 else
                     qq = qq[..].join('')   #this is for debugging
 
-                console.log 'qq:',qq
+                #console.log 'qq:',qq
 
                 linerange = new Range(new Point(tlnumber+posi,0),new Point(tlnumber + posi, qq.length))
                 options =  { normalizeLineEndings:false, undo: 'skip' }
                 current_editor.buffer.setTextInRange(linerange, qq, options)
-                console.log 'printing line:',posi
+                #console.log 'printing line:',posi
 
                 dirty[posi] = false
             #else
@@ -1268,13 +1274,13 @@ class VimState
         collected = Buffer.concat([collected, data])
         i = collected.length
         #if (collected.length % 8192 isnt 0) or (collected.length < 8192)
-        console.log 'collected.length',collected.length
+        #console.log 'collected.length',collected.length
         while i >= 1
             try
                 v = collected.slice(0,i)
                 {value:q,trailing} = decode_pub(to_uint8array(v))
                 if trailing >= 0
-                    console.log 'subscribe',q
+                    #console.log 'subscribe',q
                     [bufferId, eventName, eventInfo] = q
                     if eventName is "redraw"
                         #console.log "eventInfo", eventInfo
@@ -1380,7 +1386,7 @@ class VimState
 
                             if x[0] is "put"
                                 cnt = 0
-                                console.log 'put:',x[1..]
+                                #console.log 'put:',x[1..]
                                 for v in x[1..]
                                     if 0<=location[0] and location[0] < rows-1
                                         if location[1]>=0 and location[1]<100
@@ -1424,7 +1430,7 @@ class VimState
                     dirty = @redraw_screen(dirty,rows)
 
                     i = i - trailing
-                    console.log 'found message at:',i
+                    #console.log 'found message at:',i
                     collected = collected.slice(i,collected.length)
                     i = collected.length
 
@@ -1437,8 +1443,8 @@ class VimState
 
 
             catch err
-                console.log err,i,collected.length
-                console.log 'stack:',err.stack
+                #console.log err,i,collected.length
+                #console.log 'stack:',err.stack
                 @redraw_screen(dirty,rows)
                 break
         if scrolled
