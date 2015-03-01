@@ -7,7 +7,7 @@ map = require './mapped'
 Buffer = require("buffer").Buffer
 MarkerView = require './marker-view'
 
-CONNECT_TO = '/Users/carlos/tmp/neovim577'
+CONNECT_TO = '/Users/carlos/tmp/neovim578'
 MESSAGE_COUNTER = 1
 
 DEBUG = true
@@ -983,7 +983,7 @@ class VimState
   afterOpen: =>
 
     #console.log 'in after open'
-    @neovim_send_message([0,1,'vim_command',['set scrolloff=5']])
+    @neovim_send_message([0,1,'vim_command',['set scrolloff=2']])
     @neovim_send_message([0,1,'vim_command',['set noswapfile']])
     @neovim_send_message([0,1,'vim_command',['set nowrap']])
     @neovim_send_message([0,1,'vim_command',['set nu']])
@@ -1216,10 +1216,18 @@ class VimState
 
     if scrolled and scrolled_down
         tlnumber = tlnumberarr[tlnumberarr.length-2]
+        #current_editor.setScrollTop(19*tlnumber)
     else if scrolled and not scrolled_down
         tlnumber = tlnumberarr[0]
+        #current_editor.setScrollBottom(19*tlnumber+36*19)
     else
         tlnumber = tlnumberarr[0]
+
+    lineheight = parseFloat(atom.config.get('editor.lineHeight')) 
+    fontsize = parseFloat(atom.config.get('editor.fontSize'))
+    spacing = Math.round(lineheight * fontsize)
+
+    current_editor.setScrollTop(spacing*tlnumber)
 
     for posi in [0..rows-2]
         qq = screen[posi]
@@ -1447,7 +1455,7 @@ class VimState
             catch err
                 #console.log err,i,collected.length
                 #console.log 'stack:',err.stack
-                @redraw_screen(dirty,rows)
+                #@redraw_screen(dirty,rows)
                 break
         if scrolled
             @neovim_send_message([0,1,'vim_command',['redraw!']])
@@ -1457,7 +1465,7 @@ class VimState
 
     )
 
-    rows = 20
+    rows = 36 
     cols = 100
     message = [0,1,'ui_attach',[cols,rows,true]]
     #rows = @editor.getScreenLineCount()
