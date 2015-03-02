@@ -6,8 +6,8 @@ This is a work in progress branch that shows how to make Atom talk to Neovim.
 I've update everything to work with the version in master of
 [Neovim](http://github.com/neovim/neovim)
 
-On the Atom side I've tested it with version 0.175 and 0.184 and seems to work
-fine.
+On the [Atom](https://atom.io/) side I've tested it with version 0.175 and
+0.184 and seems to work fine.
 
 # How do you run this?
 
@@ -21,8 +21,8 @@ vim-state.coffee to /path/to/listen/address
 This project aims to:
 
 * Bring real vim bindings to Atom.
-* Give the abstract-ui neovim patch a work out and find issues using the
-msgpack api.
+* Give the abstract-ui neovim functionality a work out and find issues using
+the msgpack api.
 * Eventually build an editor that I would find useful. At the current state it is
 pre-alpha.
 
@@ -50,5 +50,9 @@ of things don't work yet)
 2. Fix it. 
 3. Send me a pull request.
 
+# Configuring
+To make sure that hjkl get repeated like (Vim and Neovim) on Mac you will need to
+run (from the command line):
 
+   defaults write com.github.atom ApplePressAndHoldEnabled -bool false
 
