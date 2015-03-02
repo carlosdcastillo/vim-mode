@@ -50,7 +50,7 @@ of things don't work yet)
 2. Fix it. 
 3. Send me a pull request.
 
-# Configuring
+# Configuring Atom
 To make sure that hjkl get repeated like (Vim and Neovim) on Mac you will need to
 run (from the command line):
 
