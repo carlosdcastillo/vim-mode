@@ -11,7 +11,7 @@ On the [Atom](https://atom.io/) side I've tested it with version 0.175 and
 
 # How do you run this?
 
-NVIM_LISTEN_ADDRESS=/path/to/listen/address /path/to/nvim -T abstract_ui
+    NVIM_LISTEN_ADDRESS=/path/to/listen/address /path/to/nvim -T abstract_ui
 
 Then you will need to configure the value of CONNECT_TO in line 11 of
 vim-state.coffee to /path/to/listen/address
@@ -54,5 +54,5 @@ of things don't work yet)
 To make sure that hjkl get repeated like (Vim and Neovim) on Mac you will need to
 run (from the command line):
 
-   defaults write com.github.atom ApplePressAndHoldEnabled -bool false
+    defaults write com.github.atom ApplePressAndHoldEnabled -bool false
 
