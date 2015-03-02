@@ -462,7 +462,17 @@ class VimState
 
     )
 
-    rows = 36 
+
+    lineheight = parseFloat(atom.config.get('editor.lineHeight')) 
+    fontsize = parseFloat(atom.config.get('editor.fontSize'))
+    spacing = Math.round(lineheight * fontsize)
+
+    qtop = current_editor.getScrollTop()
+    qbottom = current_editor.getScrollBottom()
+
+    rows = Math.round((qbottom - qtop)/spacing)
+    console.log 'rows:',rows
+
     cols = 100
     message = [0,1,'ui_attach',[cols,rows,true]]
     #rows = @editor.getScreenLineCount()
