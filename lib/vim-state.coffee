@@ -904,7 +904,7 @@ class VimState
         if @editorView.classList.contains('is-focused')
             q =  String.fromCharCode(e.which)
             console.log "pressed:"+q
-            q = q.replace '\<', '<lt>'
+            #q = q.replace '\<', '<lt>'
             @neovim_send_message([0,1,'vim_input',[q]])
             false
         else
@@ -935,7 +935,7 @@ class VimState
     else if code==40
       '<down>'
       #String.fromCharCode(27)+'[B'
-    else if code==188
+    else if code==188 and shift
       '<lt>'
     else
       ""
