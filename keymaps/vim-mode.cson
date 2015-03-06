@@ -1,0 +1,2 @@
+'atom-text-editor.vim-mode':
+  'enter': 'core:cancel' 

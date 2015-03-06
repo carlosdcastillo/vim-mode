@@ -2,7 +2,7 @@
   "name": "atom-neovim",
   "main": "./lib/vim-mode",
   "version": "0.10.1",
-  "description": "Make Atom your GUI to NeoVim.",
+  "description": "Make Atom your GUI to Neovim.",
   "license": "MIT",
   "private": true,
   "repository": "https://github.com/carlosdcastillo/vim-mode",
