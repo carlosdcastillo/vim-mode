@@ -113,10 +113,15 @@ class VimState
             true
 
   translateCode: (code, shift, control) ->
+    console.log 'code:',code
     if control && code>=65 && code<=90
         String.fromCharCode(code-64)
     else if code>=8 && code<=10 || code==13 || code==27
         String.fromCharCode(code)
+    else if code==33
+        '<PageUp>'
+    else if code==34
+        '<PageDown>'
     else if code==37
         '<left>'
     else if code==38
