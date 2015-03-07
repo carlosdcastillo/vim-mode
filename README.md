@@ -13,16 +13,12 @@ On the [Atom](https://atom.io/) side I've tested it with version 0.175 and
 
 Install, run, and quit Atom to make sure .atom exists
 
-Install vim-mode's dependencies
-
-    $ npm install underscore-plus
-    $ npm install jquery
-    $ npm install atom-space-pen-views
-
 Install vim-mode
 
     $ cd .atom/packages
     $ git clone https://github.com/carlosdcastillo/vim-mode.git
+    $ cd vim-mode
+    $ apm install # install dependencies
 
 Create a folder for the socket
 
