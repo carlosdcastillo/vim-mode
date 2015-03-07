@@ -11,15 +11,25 @@ On the [Atom](https://atom.io/) side I've tested it with version 0.175 and
 
 # How do you run this?
 
-    # After installing, running, and quitting Atom...
-    # Install dependencies
+Install, run, and quit Atom to make sure .atom exists
+
+Install vim-mode's dependencies
+
     $ npm install underscore-plus
     $ npm install jquery
     $ npm install atom-space-pen-views
-    # Install vim-mode
+
+Install vim-mode
+
     $ cd .atom/packages
     $ git clone https://github.com/carlosdcastillo/vim-mode.git
+
+Create a folder for the socket
+
     $ mkdir -p /tmp/neovim
+
+Run Neovim, pointing it to the socket
+
     $ NVIM_LISTEN_ADDRESS=/tmp/neovim/neovim581 nvim -T abstract_ui
 
 # What do you want to do with this?
