@@ -8,7 +8,7 @@ msgpack = require './msgpack'
 
 HighlightedAreaView = require './highlighted-area-view'
 
-CONNECT_TO = '/Users/carlos/tmp/neovim581'
+CONNECT_TO = '/tmp/neovim/neovim581'
 MESSAGE_COUNTER = 1
 
 DEBUG = false

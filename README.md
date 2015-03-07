@@ -11,10 +11,16 @@ On the [Atom](https://atom.io/) side I've tested it with version 0.175 and
 
 # How do you run this?
 
-    NVIM_LISTEN_ADDRESS=/path/to/listen/address /path/to/nvim -T abstract_ui
-
-Then you will need to configure the value of CONNECT_TO in line 11 of
-vim-state.coffee to /path/to/listen/address
+    # After installing, running, and quitting Atom...
+    # Install dependencies
+    $ npm install underscore-plus
+    $ npm install jquery
+    $ npm install atom-space-pen-views
+    # Install vim-mode
+    $ cd .atom/packages
+    $ git clone https://github.com/carlosdcastillo/vim-mode.git
+    $ mkdir -p /tmp/neovim
+    $ NVIM_LISTEN_ADDRESS=/tmp/neovim/neovim581 nvim -T abstract_ui
 
 # What do you want to do with this?
 
