@@ -52,8 +52,12 @@ http://www.youtube.com/watch?v=lH_zb7X6mZw
 
 * Handle Atom-centric text editing actions, i.e., situations like the user
 searching and replacing in Atom by hitting Cmd-F
-* Make the client use less CPU. It currently uses a lot of CPU, this could be a
-consequence of my limited CoffeeScript experience.
+* Make the scroll wheel work.
+* Handle files of more than 9999 lines.
+* Make Atom not complain about the file having been changed when it hasn't.
+More importantly make Cmd-S not make a mess of your file.
+* Make one of the following UI connections/integrations: visual selection,
+highlight search, auto completion, etc.
 
 # Contributing
 
