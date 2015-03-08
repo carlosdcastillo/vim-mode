@@ -28,6 +28,7 @@ location = []
 current_editor = undefined
 editor_views = {}
 element = document.createElement("item-view")
+setInterval ( => ns_redraw_win_end()), 250;
 
 range = (start, stop, step) ->
     if typeof stop is "undefined"
@@ -44,6 +45,66 @@ range = (start, stop, step) ->
         i += step
     result
 
+neovim_send_message = (message,f = undefined) ->
+    try
+        socket2 = new net.Socket()
+        socket2.connect(CONNECT_TO)
+        socket2.on('error', (error) =>
+          console.log 'error communicating (send message): ' + error
+          socket2.destroy()
+        )
+        #socket2.on('end', =>
+          #socket2.destroy()
+        #)
+        socket2.on('data', (data) =>
+          {value:q, trailing:t} = msgpack.decode_pub(msgpack.to_uint8array(data))
+          if t isnt 0
+              console.log 'not reliable'
+          if f
+              f(q[3])
+          socket2.destroy()
+        )
+        message[1] = MESSAGE_COUNTER
+        MESSAGE_COUNTER = (MESSAGE_COUNTER + 1) % 256
+        msg2 = msgpack.encode_pub(message)
+        #socket2.write(msg2, => socket2.end())
+        socket2.write(msg2)
+    catch err
+        console.log 'error in neovim_send_message '+err
+
+
+ns_redraw_win_end = () ->
+    console.log '4 times per second'
+    neovim_send_message([0,1,'vim_eval',["expand('%:p')"]], (filename) =>
+        #console.log 'filename reported by vim:',filename
+        #console.log 'current editor uri:',current_editor.getURI()
+        if filename isnt current_editor.getURI()
+            console.log 'trying to open using atom'
+            atom.workspace.open(filename)
+        else
+            neovim_send_message([0,1,'vim_eval',["line('$')"]], (nLines) =>
+                if current_editor
+                    if current_editor.buffer.getLastRow() < parseInt(nLines)
+                        nl = parseInt(nLines) - current_editor.buffer.getLastRow()
+                        diff = ''
+                        for i in [0..nl-1]
+                            diff = diff + '\n'
+                        current_editor.buffer.append(diff, true)
+
+                    if current_editor.buffer.getLastRow() >= parseInt(nLines)
+                        for i in [parseInt(nLines)+1..current_editor.buffer.getLastRow()]
+                            current_editor.buffer.deleteRow(i)
+
+                    lines = current_editor.buffer.getLines()
+                    pos = 0
+                    for item in lines
+                        if item.length > 96
+                            options =  { normalizeLineEndings:false, undo: 'skip' }
+                            current_editor.buffer.setTextInRange(new Range(new Point(pos,96),new Point(pos,item.length)),'',options)
+                        pos = pos + 1
+
+            )
+        )
 
 lineSpacing = ->
     lineheight = parseFloat(atom.config.get('editor.lineHeight')) 
@@ -232,9 +293,9 @@ class EventHandler
                 @vimState.redraw_screen(@rows)
                 break
         if scrolled
-            @vimState.neovim_send_message([0,1,'vim_command',['redraw!']])
+            neovim_send_message([0,1,'vim_command',['redraw!']])
             scrolled = false
-        @vimState.ns_redraw_win_end([])
+        #@vimState.ns_redraw_win_end([])
 
 module.exports =
 class VimState
@@ -289,7 +350,7 @@ class VimState
     @editorView.onkeypress = (e) =>
         if @editorView.classList.contains('is-focused')
             q =  String.fromCharCode(e.which)
-            @neovim_send_message([0,1,'vim_input',[q]])
+            neovim_send_message([0,1,'vim_input',[q]])
             false
         else
             true
@@ -298,7 +359,7 @@ class VimState
         if @editorView.classList.contains('is-focused') and not e.altKey
             translation = @translateCode(e.which, e.shiftKey, e.ctrlKey)
             if translation != ""
-                @neovim_send_message([0,1,'vim_input',[translation]])
+                neovim_send_message([0,1,'vim_input',[translation]])
                 false
         else
             true
@@ -349,27 +410,29 @@ class VimState
 
   activePaneChanged: =>
     try
-        @neovim_send_message([0,1,'vim_command',['e '+atom.workspace.getActiveTextEditor().getURI()]],(x) =>
+        neovim_send_message([0,1,'vim_command',['e '+atom.workspace.getActiveTextEditor().getURI()]],(x) =>
             current_editor = atom.workspace.getActiveTextEditor()
             tlnumber = 0
             @afterOpen()
         )
     catch err
+
+        console.log err
         console.log 'problem changing panes'
 
   afterOpen: =>
     #console.log 'in after open'
-    @neovim_send_message([0,1,'vim_command',['set scrolloff=2']])
-    @neovim_send_message([0,1,'vim_command',['set noswapfile']])
-    @neovim_send_message([0,1,'vim_command',['set nowrap']])
-    @neovim_send_message([0,1,'vim_command',['set nu']])
-    @neovim_send_message([0,1,'vim_command',['set autochdir']])
-    @neovim_send_message([0,1,'vim_command',['set hlsearch']])
-    @neovim_send_message([0,1,'vim_command',['set tabstop=4']])
-    @neovim_send_message([0,1,'vim_command',['set shiftwidth=4']])
-    @neovim_send_message([0,1,'vim_command',['set expandtab']])
-    @neovim_send_message([0,1,'vim_command',['set hidden']])
-    @neovim_send_message([0,1,'vim_command',['redraw!']])
+    neovim_send_message([0,1,'vim_command',['set scrolloff=2']])
+    neovim_send_message([0,1,'vim_command',['set noswapfile']])
+    neovim_send_message([0,1,'vim_command',['set nowrap']])
+    neovim_send_message([0,1,'vim_command',['set nu']])
+    neovim_send_message([0,1,'vim_command',['set autochdir']])
+    neovim_send_message([0,1,'vim_command',['set hlsearch']])
+    neovim_send_message([0,1,'vim_command',['set tabstop=4']])
+    neovim_send_message([0,1,'vim_command',['set shiftwidth=4']])
+    neovim_send_message([0,1,'vim_command',['set expandtab']])
+    neovim_send_message([0,1,'vim_command',['set hidden']])
+    neovim_send_message([0,1,'vim_command',['redraw!']])
 
 
     if not subscriptions['redraw']
@@ -378,41 +441,6 @@ class VimState
     #else
         #console.log 'NOT SUBSCRIBING, problem'
         #
-
-  ns_redraw_win_end:(q) =>
-    #console.log "redraw win end:"
-    #console.log q
-
-    @neovim_send_message([0,1,'vim_eval',["expand('%:p')"]], (filename) =>
-        #console.log 'filename reported by vim:',filename
-        #console.log 'current editor uri:',current_editor.getURI()
-        if filename isnt current_editor.getURI()
-            console.log 'trying to open using atom'
-            atom.workspace.open(filename)
-        else
-            @neovim_send_message([0,1,'vim_eval',["line('$')"]], (nLines) =>
-                if current_editor.buffer.getLastRow() < parseInt(nLines)
-                    nl = parseInt(nLines) - current_editor.buffer.getLastRow()
-                    diff = ''
-                    for i in [0..nl-1]
-                        diff = diff + '\n'
-                    current_editor.buffer.append(diff, true)
-
-                if current_editor.buffer.getLastRow() > parseInt(nLines)
-                    for i in [parseInt(nLines)+1..current_editor.buffer.getLastRow()-1]
-                        current_editor.buffer.deleteRow(i)
-
-                lines = current_editor.buffer.getLines()
-                pos = 0
-                for item in lines
-                    if item.length > 96
-                        options =  { normalizeLineEndings:false, undo: 'skip' }
-                        current_editor.buffer.setTextInRange(new Range(new Point(pos,96),new Point(pos,item.length)),'',options)
-                    pos = pos + 1
-
-            )
-        )
-
 
   redraw_screen:(rows) =>
     tlnumberarr = []
@@ -493,33 +521,6 @@ class VimState
     msg2 = msgpack.encode_pub(message)
     socket_subs.write(msg2)
     subscriptions['redraw'] = true
-
-  neovim_send_message:(message,f = undefined) ->
-    try
-        socket2 = new net.Socket()
-        socket2.connect(CONNECT_TO)
-        socket2.on('error', (error) =>
-          console.log 'error communicating (send message): ' + error
-          socket2.destroy()
-        )
-        #socket2.on('end', =>
-          #socket2.destroy()
-        #)
-        socket2.on('data', (data) =>
-          {value:q, trailing:t} = msgpack.decode_pub(msgpack.to_uint8array(data))
-          if t isnt 0
-              console.log 'not reliable'
-          if f
-              f(q[3])
-          socket2.destroy()
-        )
-        message[1] = MESSAGE_COUNTER
-        MESSAGE_COUNTER = (MESSAGE_COUNTER + 1) % 256
-        msg2 = msgpack.encode_pub(message)
-        #socket2.write(msg2, => socket2.end())
-        socket2.write(msg2)
-    catch err
-        console.log 'error in neovim_send_message '+err
 
 
   # last deleted buffer.
