@@ -1,5 +1,6 @@
 'atom-text-editor.vim-mode':
   'enter': 'core:cancel',
   'backspace': 'core:cancel'
-  'ctrl-b': 'core:cancal'
-  'ctrl-f': 'core:cancal'
+  'ctrl-b': 'core:cancel'
+  'ctrl-f': 'core:cancel'
+  'tab': 'core:cancel'
