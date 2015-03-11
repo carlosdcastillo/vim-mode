@@ -28,7 +28,7 @@ location = []
 current_editor = undefined
 editor_views = {}
 element = document.createElement("item-view")
-setInterval ( => ns_redraw_win_end()), 250;
+setInterval ( => ns_redraw_win_end()), 1000;
 
 range = (start, stop, step) ->
     if typeof stop is "undefined"
@@ -109,14 +109,14 @@ ns_redraw_win_end = () ->
 lineSpacing = ->
     lineheight = parseFloat(atom.config.get('editor.lineHeight')) 
     fontsize = parseFloat(atom.config.get('editor.fontSize'))
-    return Math.round(lineheight * fontsize)
+    return (lineheight * fontsize)
 
 class EventHandler
     constructor: (@vimState) ->
         qtop = current_editor.getScrollTop()
         qbottom = current_editor.getScrollBottom()
 
-        @rows = Math.round((qbottom - qtop)/lineSpacing())
+        @rows = Math.trunc((qbottom - qtop)/lineSpacing())
         console.log 'rows:', @rows
 
         @cols = 100
@@ -461,7 +461,7 @@ class VimState
     else
         tlnumber = tlnumberarr[0]
 
-    current_editor.setScrollTop(lineSpacing()*tlnumber)
+    current_editor.setScrollTop(Math.trunc(lineSpacing()*tlnumber))
     onedirty = false
     for posi in [0..rows-2]
         if dirty[posi]
