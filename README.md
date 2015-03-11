@@ -26,7 +26,7 @@ Create a folder for the socket
 
 Run Neovim, pointing it to the socket
 
-    $ NVIM_LISTEN_ADDRESS=/tmp/neovim/neovim581 nvim -T abstract_ui
+    $ NVIM_LISTEN_ADDRESS=/tmp/neovim/neovim581 nvim 
 
 # What do you want to do with this?
 
