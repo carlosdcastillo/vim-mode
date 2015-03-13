@@ -40,11 +40,15 @@ pre-alpha.
 
 # See it in action
 
-A new video of the integration in action, using the abstract-ui branch:
+A video that shows the integration in action in March/2015:
+
+https://www.youtube.com/watch?v=7TVBcdONEJo
+
+An older video from January of the integration in action, using the abstract-ui branch:
 
 https://www.youtube.com/watch?v=yluIxQRjUCk
 
-and this is an older video using the old redraw-events branch (from mid 2014):
+and this is an old video from 2014 using the old redraw-events branch (from mid 2014):
 
 http://www.youtube.com/watch?v=lH_zb7X6mZw
 
