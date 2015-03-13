@@ -4,3 +4,6 @@
   'ctrl-b': 'core:cancel'
   'ctrl-f': 'core:cancel'
   'tab': 'core:cancel'
+  'end': 'core:cancel' 
+  'home': 'core:cancel' 
+  'delete': 'core:cancel'

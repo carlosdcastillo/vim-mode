@@ -370,6 +370,10 @@ class VimState
         String.fromCharCode(code-64)
     else if code>=8 && code<=10 || code==13 || code==27
         String.fromCharCode(code)
+    else if code==35
+        '<End>'
+    else if code==36
+        '<Home>'
     else if code==33
         '<PageUp>'
     else if code==34
