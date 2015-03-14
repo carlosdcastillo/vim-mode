@@ -28,7 +28,7 @@ location = []
 current_editor = undefined
 editor_views = {}
 element = document.createElement("item-view")
-setInterval ( => ns_redraw_win_end()), 1000;
+setInterval ( => ns_redraw_win_end()), 1000 
 
 range = (start, stop, step) ->
     if typeof stop is "undefined"
@@ -74,42 +74,53 @@ neovim_send_message = (message,f = undefined) ->
 
 
 ns_redraw_win_end = () ->
-    console.log '4 times per second'
-    neovim_send_message([0,1,'vim_eval',["expand('%:p')"]], (filename) =>
-        #console.log 'filename reported by vim:',filename
-        #console.log 'current editor uri:',current_editor.getURI()
-        if filename isnt current_editor.getURI()
-            console.log 'trying to open using atom'
-            atom.workspace.open(filename)
-        else
-            neovim_send_message([0,1,'vim_eval',["line('$')"]], (nLines) =>
-                if current_editor
-                    if current_editor.buffer.getLastRow() < parseInt(nLines)
-                        nl = parseInt(nLines) - current_editor.buffer.getLastRow()
-                        diff = ''
-                        for i in [0..nl-1]
-                            diff = diff + '\n'
-                        current_editor.buffer.append(diff, true)
+    #console.log '4 times per second'
+    #console.log 'focused:', editor_views[current_editor.getURI()].component.newState.focused
+    #if typeof editor_views[current_editor.getURI()].component.newState.focused is 'undefined'
+    go = true
+    #else
+        #go = editor_views[current_editor.getURI()].component.newState.focused
 
-                    if current_editor.buffer.getLastRow() >= parseInt(nLines)
-                        for i in [parseInt(nLines)+1..current_editor.buffer.getLastRow()]
-                            current_editor.buffer.deleteRow(i)
+    if go
+        neovim_send_message([0,1,'vim_eval',["expand('%:p')"]], (filename) =>
+            #console.log 'filename reported by vim:',filename
+            #console.log 'current editor uri:',current_editor.getURI()
+            if filename isnt current_editor.getURI()
+                console.log 'trying to open using atom'
+                atom.workspace.open(filename)
+            else
+                neovim_send_message([0,1,'vim_eval',["line('$')"]], (nLines) =>
+                    if current_editor
+                        if current_editor.buffer.getLastRow() < parseInt(nLines)
+                            nl = parseInt(nLines) - current_editor.buffer.getLastRow()
+                            diff = ''
+                            for i in [0..nl-1]
+                                diff = diff + '\n'
+                            current_editor.buffer.append(diff, true)
 
-                    lines = current_editor.buffer.getLines()
-                    pos = 0
-                    for item in lines
-                        if item.length > 96
-                            options =  { normalizeLineEndings:false, undo: 'skip' }
-                            current_editor.buffer.setTextInRange(new Range(new Point(pos,96),new Point(pos,item.length)),'',options)
-                        pos = pos + 1
+                        if current_editor.buffer.getLastRow() >= parseInt(nLines)
+                            for i in [parseInt(nLines)+1..current_editor.buffer.getLastRow()]
+                                current_editor.buffer.deleteRow(i)
 
+                        lines = current_editor.buffer.getLines()
+                        pos = 0
+                        for item in lines
+                            if item.length > 96
+                                options =  { normalizeLineEndings:false, undo: 'skip' }
+                                current_editor.buffer.setTextInRange(new Range(new Point(pos,96),new Point(pos,item.length)),'',options)
+                            pos = pos + 1
+
+                )
             )
-        )
 
 lineSpacing = ->
     lineheight = parseFloat(atom.config.get('editor.lineHeight')) 
     fontsize = parseFloat(atom.config.get('editor.fontSize'))
     return (lineheight * fontsize)
+
+
+scrollTopChanged = () ->
+    console.log 'scrolled';
 
 class EventHandler
     constructor: (@vimState) ->
@@ -233,7 +244,6 @@ class EventHandler
                                     else
                                         scrolled_down = false
 
-
                             else if x[0] is "put"
                                 cnt = 0
                                 #console.log 'put:',x[1..]
@@ -248,7 +258,6 @@ class EventHandler
                                         location[1] = location[1] + 1
                                     else if location[0] > @rows - 1
                                         console.log 'over the max'
-
 
                             else if x[0] is "clear"
                                 #console.log 'clear'
@@ -295,7 +304,6 @@ class EventHandler
         if scrolled
             neovim_send_message([0,1,'vim_command',['redraw!']])
             scrolled = false
-        #@vimState.ns_redraw_win_end([])
 
 module.exports =
 class VimState
@@ -318,7 +326,6 @@ class VimState
     @changeModeClass('command-mode')
     @activateCommandMode()
 
-
     atom.packages.once 'activated', ->
         element.innerHTML = ''
         @statusbar = document.querySelector('status-bar').addLeftTile(item:element,priority:10 )
@@ -332,6 +339,7 @@ class VimState
         #console.log trailing
         qq = q[3][1]
         #console.log 'data:',qq
+
         socket.end()
         socket.destroy()
     )
@@ -345,7 +353,6 @@ class VimState
       #@registerChangeHandler(buffer)
 
     #atom.workspaceView.on 'pane-container:active-pane-item-changed', @activePaneChanged
-    atom.workspace.onDidChangeActivePaneItem @activePaneChanged
 
     @editorView.onkeypress = (e) =>
         if @editorView.classList.contains('is-focused')
@@ -363,6 +370,7 @@ class VimState
                 false
         else
             true
+
 
   translateCode: (code, shift, control) ->
     console.log 'code:',code
@@ -431,6 +439,8 @@ class VimState
     neovim_send_message([0,1,'vim_command',['set nowrap']])
     neovim_send_message([0,1,'vim_command',['set nu']])
     neovim_send_message([0,1,'vim_command',['set autochdir']])
+    neovim_send_message([0,1,'vim_command',['set autoindent']])
+    neovim_send_message([0,1,'vim_command',['set smartindent']])
     neovim_send_message([0,1,'vim_command',['set hlsearch']])
     neovim_send_message([0,1,'vim_command',['set tabstop=4']])
     neovim_send_message([0,1,'vim_command',['set shiftwidth=4']])
