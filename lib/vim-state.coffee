@@ -79,7 +79,7 @@ neovim_send_message = (message,f = undefined) ->
 ns_redraw_win_end = () ->
     #console.log '4 times per second'
     #console.log 'focused:', editor_views[current_editor.getURI()].component.newState.focused
-    if typeof editor_views[current_editor.getURI()].component.newState.focused is 'undefined'
+    if editor_views[current_editor.getURI()].component.newState is null 
         go = true
     else
         go = editor_views[current_editor.getURI()].component.newState.focused
