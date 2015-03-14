@@ -27,6 +27,9 @@ status_bar = []
 location = []
 current_editor = undefined
 editor_views = {}
+
+scrolltopchange_subscription = undefined
+
 element = document.createElement("item-view")
 setInterval ( => ns_redraw_win_end()), 250
 
@@ -76,10 +79,10 @@ neovim_send_message = (message,f = undefined) ->
 ns_redraw_win_end = () ->
     #console.log '4 times per second'
     #console.log 'focused:', editor_views[current_editor.getURI()].component.newState.focused
-    #if typeof editor_views[current_editor.getURI()].component.newState.focused is 'undefined'
-    go = true
-    #else
-        #go = editor_views[current_editor.getURI()].component.newState.focused
+    if typeof editor_views[current_editor.getURI()].component.newState.focused is 'undefined'
+        go = true
+    else
+        go = editor_views[current_editor.getURI()].component.newState.focused
 
     if go
         neovim_send_message([0,1,'vim_eval',["expand('%:p')"]], (filename) =>
@@ -424,7 +427,12 @@ class VimState
   activePaneChanged: =>
     try
         neovim_send_message([0,1,'vim_command',['e '+atom.workspace.getActiveTextEditor().getURI()]],(x) =>
+            if scrolltopchange_subscription
+                scrolltopchange_subscription.dispose()
+
             current_editor = atom.workspace.getActiveTextEditor()
+            scrolltopchange_subscription = current_editor.onDidChangeScrollTop scrollTopChanged 
+
             tlnumber = 0
             @afterOpen()
         )
