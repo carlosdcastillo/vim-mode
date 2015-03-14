@@ -29,6 +29,7 @@ current_editor = undefined
 editor_views = {}
 
 scrolltopchange_subscription = undefined
+scrolltop = undefined
 
 element = document.createElement("item-view")
 setInterval ( => ns_redraw_win_end()), 250
@@ -79,12 +80,12 @@ neovim_send_message = (message,f = undefined) ->
 ns_redraw_win_end = () ->
     #console.log '4 times per second'
     #console.log 'focused:', editor_views[current_editor.getURI()].component.newState.focused
-    if editor_views[current_editor.getURI()].component.newState is null 
-        go = true
-    else
-        go = editor_views[current_editor.getURI()].component.newState.focused
-
-    if go
+    #if editor_views[current_editor.getURI()].component is null or editor_views[current_editor.getURI()].component.newState is null
+    #    focused = true
+    #else
+    #    focused = editor_views[current_editor.getURI()].component.newState.focused
+    focused = editor_views[current_editor.getURI()].classList.contains('is-focused')
+    if focused 
         neovim_send_message([0,1,'vim_eval',["expand('%:p')"]], (filename) =>
             #console.log 'filename reported by vim:',filename
             #console.log 'current editor uri:',current_editor.getURI()
@@ -124,6 +125,15 @@ lineSpacing = ->
 
 scrollTopChanged = () ->
     console.log 'scrolled';
+    if scrolltop
+        if scrolltop - current_editor.getScrollTop() > 0
+            console.log 'scroll up'
+        else
+            console.log 'scroll down'
+
+    scrolltop = current_editor.getScrollTop()
+
+
 
 class EventHandler
     constructor: (@vimState) ->
@@ -432,6 +442,7 @@ class VimState
 
             current_editor = atom.workspace.getActiveTextEditor()
             scrolltopchange_subscription = current_editor.onDidChangeScrollTop scrollTopChanged 
+            scrolltop = undefined
 
             tlnumber = 0
             @afterOpen()
