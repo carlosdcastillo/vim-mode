@@ -7,3 +7,7 @@
   'end': 'core:cancel' 
   'home': 'core:cancel' 
   'delete': 'core:cancel'
+  'up': 'core:cancel'
+  'down': 'core:cancel'
+  'left': 'core:cancel'
+  'right': 'core:cancel'
