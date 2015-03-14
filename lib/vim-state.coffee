@@ -28,7 +28,7 @@ location = []
 current_editor = undefined
 editor_views = {}
 element = document.createElement("item-view")
-setInterval ( => ns_redraw_win_end()), 1000 
+setInterval ( => ns_redraw_win_end()), 250
 
 range = (start, stop, step) ->
     if typeof stop is "undefined"
@@ -353,6 +353,7 @@ class VimState
       #@registerChangeHandler(buffer)
 
     #atom.workspaceView.on 'pane-container:active-pane-item-changed', @activePaneChanged
+    atom.workspace.onDidChangeActivePaneItem @activePaneChanged
 
     @editorView.onkeypress = (e) =>
         if @editorView.classList.contains('is-focused')
