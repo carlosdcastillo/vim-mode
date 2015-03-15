@@ -30,6 +30,7 @@ editor_views = {}
 
 scrolltopchange_subscription = undefined
 scrolltop = undefined
+internal_change = false
 
 element = document.createElement("item-view")
 setInterval ( => ns_redraw_win_end()), 250
@@ -124,12 +125,16 @@ lineSpacing = ->
 
 
 scrollTopChanged = () ->
-    console.log 'scrolled';
-    if scrolltop
-        if scrolltop - current_editor.getScrollTop() > 0
-            console.log 'scroll up'
-        else
-            console.log 'scroll down'
+    if editor_views[current_editor.getURI()].classList.contains('is-focused') and not internal_change
+        console.log 'scrolled';
+        if scrolltop
+            diff = scrolltop - current_editor.getScrollTop()
+            if  diff > 0
+                console.log 'scroll up:',diff
+                neovim_send_message([0,1,'vim_input',['<ScrollWheelUp>']])
+            else
+                console.log 'scroll down:',diff
+                neovim_send_message([0,1,'vim_input',['<ScrollWheelDown>']])
 
     scrolltop = current_editor.getScrollTop()
 
@@ -146,6 +151,7 @@ class EventHandler
         @cols = 100
 
     handleEvent: (data) =>
+        internal_change = true
         dirty = (false for i in [0..@rows-2])
         collected = Buffer.concat([collected, data])
         i = collected.length
@@ -314,9 +320,12 @@ class EventHandler
                 console.log 'stack:',err.stack
                 @vimState.redraw_screen(@rows)
                 break
+
         if scrolled
             neovim_send_message([0,1,'vim_command',['redraw!']])
             scrolled = false
+
+        internal_change = false 
 
 module.exports =
 class VimState
