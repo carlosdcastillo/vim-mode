@@ -17,7 +17,6 @@ subscriptions['redraw'] = false
 socket_subs = null
 collected = new Buffer(0)
 screen = []
-dirty = []
 tlnumber = 0
 cursor_visible = true
 command_mode = true
@@ -302,7 +301,7 @@ class EventHandler
                                 else if location[0] > @rows - 1
                                     console.log 'over the max'
 
-                        @vimState.redraw_screen(@rows)
+                        @vimState.redraw_screen(@rows, dirty)
 
                     i = i - trailing
                     #console.log 'found message at:',i
@@ -318,7 +317,7 @@ class EventHandler
                 #console.log err,i,collected.length
                 console.log err
                 console.log 'stack:',err.stack
-                @vimState.redraw_screen(@rows)
+                @vimState.redraw_screen(@rows, null)
                 break
 
         if scrolled
@@ -485,7 +484,7 @@ class VimState
         #console.log 'NOT SUBSCRIBING, problem'
         #
 
-  redraw_screen:(rows) =>
+  redraw_screen:(rows, dirty) =>
     tlnumberarr = []
     for posi in [0..rows-1]
         try
@@ -505,28 +504,29 @@ class VimState
         tlnumber = tlnumberarr[0]
 
     current_editor.setScrollTop(Math.trunc(lineSpacing()*tlnumber))
-    onedirty = false
-    for posi in [0..rows-2]
-        if dirty[posi]
-            onedirty = true
-            break
     
-    if onedirty
+    if dirty
+        onedirty = false
         for posi in [0..rows-2]
-            qq = screen[posi]
-            pos = parseInt(qq[0..3].join(''))
-            if not isNaN(pos)
-                if (pos-1 == tlnumber + posi) and dirty[posi]
-                    if not DEBUG
-                        qq = qq[4..].join('')
-                    else
-                        qq = qq[..].join('')   #this is for debugging
+            if dirty[posi]
+                onedirty = true
+                break
+        
+        if onedirty
+            for posi in [0..rows-2]
+                qq = screen[posi]
+                pos = parseInt(qq[0..3].join(''))
+                if not isNaN(pos)
+                    if (pos-1 == tlnumber + posi) and dirty[posi]
+                        if not DEBUG
+                            qq = qq[4..].join('')
+                        else
+                            qq = qq[..].join('')   #this is for debugging
 
-                    linerange = new Range(new Point(tlnumber+posi,0),new Point(tlnumber + posi, qq.length))
-                    options =  { normalizeLineEndings:false, undo: 'skip' }
-                    current_editor.buffer.setTextInRange(linerange, qq, options)
-                    dirty[posi] = false
-
+                        linerange = new Range(new Point(tlnumber+posi,0),new Point(tlnumber + posi, qq.length))
+                        options =  { normalizeLineEndings:false, undo: 'skip' }
+                        current_editor.buffer.setTextInRange(linerange, qq, options)
+                        dirty[posi] = false
 
     sbt = status_bar.join('').trim()
     @updateStatusBarWithText(sbt)
