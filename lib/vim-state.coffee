@@ -32,7 +32,7 @@ scrolltop = undefined
 internal_change = false
 
 element = document.createElement("item-view")
-setInterval ( => ns_redraw_win_end()), 250
+setInterval ( => ns_redraw_win_end()), 500
 
 range = (start, stop, step) ->
     if typeof stop is "undefined"
@@ -124,16 +124,17 @@ lineSpacing = ->
 
 
 scrollTopChanged = () ->
-    if editor_views[current_editor.getURI()].classList.contains('is-focused') and not internal_change
-        console.log 'scrolled';
-        if scrolltop
-            diff = scrolltop - current_editor.getScrollTop()
-            if  diff > 0
-                console.log 'scroll up:',diff
-                neovim_send_message([0,1,'vim_input',['<ScrollWheelUp>']])
-            else
-                console.log 'scroll down:',diff
-                neovim_send_message([0,1,'vim_input',['<ScrollWheelDown>']])
+    if not internal_change
+        if editor_views[current_editor.getURI()].classList.contains('is-focused')
+            console.log 'scrolled';
+            if scrolltop
+                diff = scrolltop - current_editor.getScrollTop()
+                if  diff > 0
+                    console.log 'scroll up:',diff
+                    neovim_send_message([0,1,'vim_input',['<ScrollWheelUp>']])
+                else
+                    console.log 'scroll down:',diff
+                    neovim_send_message([0,1,'vim_input',['<ScrollWheelDown>']])
 
     scrolltop = current_editor.getScrollTop()
 
