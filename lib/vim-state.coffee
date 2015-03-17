@@ -18,7 +18,6 @@ socket_subs = null
 collected = new Buffer(0)
 screen = []
 tlnumber = 0
-cursor_visible = true
 scrolled = false
 scrolled_down = false
 status_bar = []
@@ -194,11 +193,11 @@ class EventHandler
                                     @vimState.activateCommandMode()
                                 else
                                     @vimState.activateInsertMode()
-                                cursor_visible = true
+                                @vimState.cursor_visible = true
 
                             else if x[0] is "cursor_off"
                                 @vimState.activateInvisibleMode()
-                                cursor_visible = false
+                                @vimState.cursor_visible = false
 
                             else if x[0] is "scroll"
                                 for v in x[1..]
@@ -337,6 +336,7 @@ class VimState
     editor_views[@editor.getURI()] = @editorView
     @editorView.component.setInputEnabled(false);
     @mode = 'command'
+    @cursor_visible = true
 
     #
     #@area = new HighlightedAreaView(@editorView)
@@ -532,7 +532,7 @@ class VimState
     sbt = status_bar.join('').trim()
     @updateStatusBarWithText(sbt)
 
-    if cursor_visible and location[0] <= rows - 2
+    if @cursor_visible and location[0] <= rows - 2
         if not DEBUG
             current_editor.setCursorBufferPosition(new Point(tlnumber + location[0], location[1]-4),{autoscroll:true})
         else
