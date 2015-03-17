@@ -19,7 +19,6 @@ collected = new Buffer(0)
 screen = []
 tlnumber = 0
 scrolled = false
-scrolled_down = false
 status_bar = []
 location = []
 current_editor = undefined
@@ -258,9 +257,9 @@ class EventHandler
 
                                     scrolled = true
                                     if count > 0
-                                        scrolled_down = true
+                                        @vimState.scrolled_down = true
                                     else
-                                        scrolled_down = false
+                                        @vimState.scrolled_down = false
 
                             else if x[0] is "put"
                                 cnt = 0
@@ -337,6 +336,7 @@ class VimState
     @editorView.component.setInputEnabled(false);
     @mode = 'command'
     @cursor_visible = true
+    @scrolled_down = false
 
     #
     #@area = new HighlightedAreaView(@editorView)
@@ -497,9 +497,9 @@ class VimState
         catch err
             tlnumberarr.push -1
 
-    if scrolled and scrolled_down
+    if scrolled and @scrolled_down
         tlnumber = tlnumberarr[tlnumberarr.length-2]
-    else if scrolled and not scrolled_down
+    else if scrolled and not @scrolled_down
         tlnumber = tlnumberarr[0]
     else
         tlnumber = tlnumberarr[0]
