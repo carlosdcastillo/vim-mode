@@ -17,7 +17,6 @@ subscriptions['redraw'] = false
 socket_subs = null
 collected = new Buffer(0)
 screen = []
-tlnumber = 0
 scrolled = false
 status_bar = []
 location = []
@@ -337,6 +336,7 @@ class VimState
     @mode = 'command'
     @cursor_visible = true
     @scrolled_down = false
+    @tlnumber = 0
 
     #
     #@area = new HighlightedAreaView(@editorView)
@@ -453,7 +453,7 @@ class VimState
             scrolltopchange_subscription = current_editor.onDidChangeScrollTop scrollTopChanged 
             scrolltop = undefined
 
-            tlnumber = 0
+            @tlnumber = 0
             @afterOpen()
         )
     catch err
@@ -498,13 +498,13 @@ class VimState
             tlnumberarr.push -1
 
     if scrolled and @scrolled_down
-        tlnumber = tlnumberarr[tlnumberarr.length-2]
+        @tlnumber = tlnumberarr[tlnumberarr.length-2]
     else if scrolled and not @scrolled_down
-        tlnumber = tlnumberarr[0]
+        @tlnumber = tlnumberarr[0]
     else
-        tlnumber = tlnumberarr[0]
+        @tlnumber = tlnumberarr[0]
 
-    current_editor.setScrollTop(Math.trunc(lineSpacing()*tlnumber))
+    current_editor.setScrollTop(Math.trunc(lineSpacing()*@tlnumber))
     
     if dirty
         onedirty = false
@@ -518,13 +518,13 @@ class VimState
                 qq = screen[posi]
                 pos = parseInt(qq[0..3].join(''))
                 if not isNaN(pos)
-                    if (pos-1 == tlnumber + posi) and dirty[posi]
+                    if (pos-1 == @tlnumber + posi) and dirty[posi]
                         if not DEBUG
                             qq = qq[4..].join('')
                         else
                             qq = qq[..].join('')   #this is for debugging
 
-                        linerange = new Range(new Point(tlnumber+posi,0),new Point(tlnumber + posi, qq.length))
+                        linerange = new Range(new Point(@tlnumber+posi,0),new Point(@tlnumber + posi, qq.length))
                         options =  { normalizeLineEndings:false, undo: 'skip' }
                         current_editor.buffer.setTextInRange(linerange, qq, options)
                         dirty[posi] = false
@@ -534,9 +534,9 @@ class VimState
 
     if @cursor_visible and location[0] <= rows - 2
         if not DEBUG
-            current_editor.setCursorBufferPosition(new Point(tlnumber + location[0], location[1]-4),{autoscroll:true})
+            current_editor.setCursorBufferPosition(new Point(@tlnumber + location[0], location[1]-4),{autoscroll:true})
         else
-            current_editor.setCursorBufferPosition(new Point(tlnumber + location[0], location[1]),{autoscroll:true})
+            current_editor.setCursorBufferPosition(new Point(@tlnumber + location[0], location[1]),{autoscroll:true})
 
   neovim_subscribe: =>
     console.log 'neovim_subscribe'
