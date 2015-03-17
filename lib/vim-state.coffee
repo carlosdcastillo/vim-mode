@@ -17,11 +17,7 @@ subscriptions['redraw'] = false
 socket_subs = null
 collected = new Buffer(0)
 screen = []
-tlnumber = 0
-cursor_visible = true
-command_mode = true
 scrolled = false
-scrolled_down = false
 status_bar = []
 location = []
 current_editor = undefined
@@ -149,6 +145,7 @@ class EventHandler
         console.log 'rows:', @rows
 
         @cols = 100
+        @command_mode = true
 
     handleEvent: (data) =>
         internal_change = true
@@ -180,25 +177,25 @@ class EventHandler
 
                             else if x[0] is "insert_mode"
                                 @vimState.activateInsertMode()
-                                command_mode = false
+                                @command_mode = false
 
                             else if x[0] is "normal_mode"
                                 @vimState.activateCommandMode()
-                                command_mode = true
+                                @command_mode = true
 
                             else if x[0] is "bell"
                                 atom.beep()
 
                             else if x[0] is "cursor_on"
-                                if command_mode
+                                if @command_mode
                                     @vimState.activateCommandMode()
                                 else
                                     @vimState.activateInsertMode()
-                                cursor_visible = true
+                                @vimState.cursor_visible = true
 
                             else if x[0] is "cursor_off"
                                 @vimState.activateInvisibleMode()
-                                cursor_visible = false
+                                @vimState.cursor_visible = false
 
                             else if x[0] is "scroll"
                                 for v in x[1..]
@@ -259,9 +256,9 @@ class EventHandler
 
                                     scrolled = true
                                     if count > 0
-                                        scrolled_down = true
+                                        @vimState.scrolled_down = true
                                     else
-                                        scrolled_down = false
+                                        @vimState.scrolled_down = false
 
                             else if x[0] is "put"
                                 cnt = 0
@@ -337,6 +334,9 @@ class VimState
     editor_views[@editor.getURI()] = @editorView
     @editorView.component.setInputEnabled(false);
     @mode = 'command'
+    @cursor_visible = true
+    @scrolled_down = false
+    @tlnumber = 0
 
     #
     #@area = new HighlightedAreaView(@editorView)
@@ -453,7 +453,7 @@ class VimState
             scrolltopchange_subscription = current_editor.onDidChangeScrollTop scrollTopChanged 
             scrolltop = undefined
 
-            tlnumber = 0
+            @tlnumber = 0
             @afterOpen()
         )
     catch err
@@ -497,14 +497,14 @@ class VimState
         catch err
             tlnumberarr.push -1
 
-    if scrolled and scrolled_down
-        tlnumber = tlnumberarr[tlnumberarr.length-2]
-    else if scrolled and not scrolled_down
-        tlnumber = tlnumberarr[0]
+    if scrolled and @scrolled_down
+        @tlnumber = tlnumberarr[tlnumberarr.length-2]
+    else if scrolled and not @scrolled_down
+        @tlnumber = tlnumberarr[0]
     else
-        tlnumber = tlnumberarr[0]
+        @tlnumber = tlnumberarr[0]
 
-    current_editor.setScrollTop(Math.trunc(lineSpacing()*tlnumber))
+    current_editor.setScrollTop(Math.trunc(lineSpacing()*@tlnumber))
     
     if dirty
         onedirty = false
@@ -518,13 +518,13 @@ class VimState
                 qq = screen[posi]
                 pos = parseInt(qq[0..3].join(''))
                 if not isNaN(pos)
-                    if (pos-1 == tlnumber + posi) and dirty[posi]
+                    if (pos-1 == @tlnumber + posi) and dirty[posi]
                         if not DEBUG
                             qq = qq[4..].join('')
                         else
                             qq = qq[..].join('')   #this is for debugging
 
-                        linerange = new Range(new Point(tlnumber+posi,0),new Point(tlnumber + posi, qq.length))
+                        linerange = new Range(new Point(@tlnumber+posi,0),new Point(@tlnumber + posi, qq.length))
                         options =  { normalizeLineEndings:false, undo: 'skip' }
                         current_editor.buffer.setTextInRange(linerange, qq, options)
                         dirty[posi] = false
@@ -532,11 +532,11 @@ class VimState
     sbt = status_bar.join('').trim()
     @updateStatusBarWithText(sbt)
 
-    if cursor_visible and location[0] <= rows - 2
+    if @cursor_visible and location[0] <= rows - 2
         if not DEBUG
-            current_editor.setCursorBufferPosition(new Point(tlnumber + location[0], location[1]-4),{autoscroll:true})
+            current_editor.setCursorBufferPosition(new Point(@tlnumber + location[0], location[1]-4),{autoscroll:true})
         else
-            current_editor.setCursorBufferPosition(new Point(tlnumber + location[0], location[1]),{autoscroll:true})
+            current_editor.setCursorBufferPosition(new Point(@tlnumber + location[0], location[1]),{autoscroll:true})
 
   neovim_subscribe: =>
     console.log 'neovim_subscribe'
