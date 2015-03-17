@@ -19,7 +19,6 @@ collected = new Buffer(0)
 screen = []
 tlnumber = 0
 cursor_visible = true
-command_mode = true
 scrolled = false
 scrolled_down = false
 status_bar = []
@@ -149,6 +148,7 @@ class EventHandler
         console.log 'rows:', @rows
 
         @cols = 100
+        @command_mode = true
 
     handleEvent: (data) =>
         internal_change = true
@@ -180,17 +180,17 @@ class EventHandler
 
                             else if x[0] is "insert_mode"
                                 @vimState.activateInsertMode()
-                                command_mode = false
+                                @command_mode = false
 
                             else if x[0] is "normal_mode"
                                 @vimState.activateCommandMode()
-                                command_mode = true
+                                @command_mode = true
 
                             else if x[0] is "bell"
                                 atom.beep()
 
                             else if x[0] is "cursor_on"
-                                if command_mode
+                                if @command_mode
                                     @vimState.activateCommandMode()
                                 else
                                     @vimState.activateInsertMode()
