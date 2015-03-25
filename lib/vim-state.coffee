@@ -80,6 +80,9 @@ ns_redraw_win_end = () ->
     #    focused = true
     #else
     #    focused = editor_views[current_editor.getURI()].component.newState.focused
+    if not current_editor
+        return
+
     focused = editor_views[current_editor.getURI()].classList.contains('is-focused')
     if focused 
         neovim_send_message([0,1,'vim_eval',["expand('%:p')"]], (filename) =>
@@ -475,6 +478,7 @@ class VimState
     neovim_send_message([0,1,'vim_command',['set shiftwidth=4']])
     neovim_send_message([0,1,'vim_command',['set expandtab']])
     neovim_send_message([0,1,'vim_command',['set hidden']])
+    neovim_send_message([0,1,'vim_command',['set backspace=indent,eol,start']])
     neovim_send_message([0,1,'vim_command',['redraw!']])
 
 
