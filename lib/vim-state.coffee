@@ -17,6 +17,7 @@ subscriptions['redraw'] = false
 socket_subs = null
 collected = new Buffer(0)
 screen = []
+screen_f = []
 scrolled = false
 status_bar = []
 location = []
@@ -82,6 +83,8 @@ ns_redraw_win_end = () ->
     #    focused = editor_views[current_editor.getURI()].component.newState.focused
     if not current_editor
         return
+    if not editor_views[current_editor.getURI()]
+        return
 
     focused = editor_views[current_editor.getURI()].classList.contains('is-focused')
     if focused 
@@ -104,6 +107,7 @@ ns_redraw_win_end = () ->
                         if current_editor.buffer.getLastRow() >= parseInt(nLines)
                             for i in [parseInt(nLines)+1..current_editor.buffer.getLastRow()]
                                 current_editor.buffer.deleteRow(i)
+                            current_editor.buffer.append('\n', true)
 
                         lines = current_editor.buffer.getLines()
                         pos = 0
@@ -478,6 +482,7 @@ class VimState
     neovim_send_message([0,1,'vim_command',['set shiftwidth=4']])
     neovim_send_message([0,1,'vim_command',['set expandtab']])
     neovim_send_message([0,1,'vim_command',['set hidden']])
+    neovim_send_message([0,1,'vim_command',['set list']])
     neovim_send_message([0,1,'vim_command',['set backspace=indent,eol,start']])
     neovim_send_message([0,1,'vim_command',['redraw!']])
 
@@ -489,11 +494,24 @@ class VimState
         #console.log 'NOT SUBSCRIBING, problem'
         #
 
+  postprocess: (rows) =>
+    screen_f = []
+    for posi in [0..rows-1]
+        line = undefined
+        if screen[posi]
+            line = []
+            for posj in [0..screen[posi].length-3]
+                if screen[posi][posj]=='$' and screen[posi][posj+1]==' ' and screen[posi][posj+2]==' '
+                    break
+                line.push screen[posi][posj]
+        screen_f.push line
+
   redraw_screen:(rows, dirty) =>
+    @postprocess(rows)
     tlnumberarr = []
     for posi in [0..rows-1]
         try
-            pos = parseInt(screen[posi][0..3].join(''))
+            pos = parseInt(screen_f[posi][0..3].join(''))
             if not isNaN(pos)
                 tlnumberarr.push (  (pos - 1) - posi  )
             else
@@ -519,7 +537,7 @@ class VimState
         
         if onedirty
             for posi in [0..rows-2]
-                qq = screen[posi]
+                qq = screen_f[posi]
                 pos = parseInt(qq[0..3].join(''))
                 if not isNaN(pos)
                     if (pos-1 == @tlnumber + posi) and dirty[posi]
@@ -528,7 +546,7 @@ class VimState
                         else
                             qq = qq[..].join('')   #this is for debugging
 
-                        linerange = new Range(new Point(@tlnumber+posi,0),new Point(@tlnumber + posi, qq.length))
+                        linerange = new Range(new Point(@tlnumber+posi,0),new Point(@tlnumber + posi, 96))
                         options =  { normalizeLineEndings:false, undo: 'skip' }
                         current_editor.buffer.setTextInRange(linerange, qq, options)
                         dirty[posi] = false
