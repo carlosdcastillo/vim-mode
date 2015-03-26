@@ -103,11 +103,9 @@ ns_redraw_win_end = () ->
                             for i in [0..nl-1]
                                 diff = diff + '\n'
                             current_editor.buffer.append(diff, true)
-
-                        if current_editor.buffer.getLastRow() >= parseInt(nLines)
-                            for i in [parseInt(nLines)+1..current_editor.buffer.getLastRow()]
+                        else if current_editor.buffer.getLastRow() > parseInt(nLines)
+                            for i in [parseInt(nLines)..current_editor.buffer.getLastRow()]
                                 current_editor.buffer.deleteRow(i)
-                            current_editor.buffer.append('\n', true)
 
                         lines = current_editor.buffer.getLines()
                         pos = 0
