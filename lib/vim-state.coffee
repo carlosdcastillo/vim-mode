@@ -73,12 +73,6 @@ neovim_send_message = (message,f = undefined) ->
 
 
 ns_redraw_win_end = () ->
-    #console.log '4 times per second'
-    #console.log 'focused:', editor_views[current_editor.getURI()].component.newState.focused
-    #if editor_views[current_editor.getURI()].component is null or editor_views[current_editor.getURI()].component.newState is null
-    #    focused = true
-    #else
-    #    focused = editor_views[current_editor.getURI()].component.newState.focused
     if not current_editor
         return
     if not editor_views[current_editor.getURI()]
@@ -105,12 +99,16 @@ ns_redraw_win_end = () ->
                             for i in [parseInt(nLines)..current_editor.buffer.getLastRow()]
                                 current_editor.buffer.deleteRow(i)
 
+
+
                         lines = current_editor.buffer.getLines()
                         pos = 0
                         for item in lines
                             if item.length > 96
                                 options =  { normalizeLineEndings:false, undo: 'skip' }
-                                current_editor.buffer.setTextInRange(new Range(new Point(pos,96),new Point(pos,item.length)),'',options)
+                                current_editor.buffer.setTextInRange(new Range(
+                                    new Point(pos,96),
+                                    new Point(pos,item.length)),'',options)
                             pos = pos + 1
 
                 )
@@ -176,7 +174,6 @@ class EventHandler
                                 @screen_bot = parseInt(x[1][1])
                                 @screen_left = parseInt(x[1][2])
                                 @screen_right = parseInt(x[1][3])
-                                #console.log "set_scroll_region",screen_top,screen_bot,screen_left,screen_right
 
                             else if x[0] is "insert_mode"
                                 @vimState.activateInsertMode()
@@ -329,6 +326,11 @@ class EventHandler
             neovim_send_message([0,1,'vim_command',['redraw!']])
             scrolled = false
 
+        options =  { normalizeLineEndings:false, undo: 'skip' }
+        current_editor.buffer.setTextInRange(new Range(
+                new Point(current_editor.buffer.getLastRow(),0),
+                new Point(current_editor.buffer.getLastRow(),96)),'',
+                options)
         internal_change = false 
 
 module.exports =
@@ -359,7 +361,8 @@ class VimState
 
     atom.packages.once 'activated', ->
         element.innerHTML = ''
-        @statusbar = document.querySelector('status-bar').addLeftTile(item:element,priority:10 )
+        @statusbar = document.querySelector('status-bar').addLeftTile(item:element,
+                                                                        priority:10 )
 
     socket = new net.Socket()
     socket.connect(CONNECT_TO)
@@ -454,12 +457,14 @@ class VimState
 
   activePaneChanged: =>
     try
-        neovim_send_message([0,1,'vim_command',['e '+atom.workspace.getActiveTextEditor().getURI()]],(x) =>
+        neovim_send_message([0,1,'vim_command',['e '+
+                            atom.workspace.getActiveTextEditor().getURI()]],(x) =>
             if scrolltopchange_subscription
                 scrolltopchange_subscription.dispose()
 
             current_editor = atom.workspace.getActiveTextEditor()
-            scrolltopchange_subscription = current_editor.onDidChangeScrollTop scrollTopChanged 
+            scrolltopchange_subscription = 
+                current_editor.onDidChangeScrollTop scrollTopChanged 
             scrolltop = undefined
 
             @tlnumber = 0
@@ -503,7 +508,8 @@ class VimState
         if screen[posi]
             line = []
             for posj in [0..screen[posi].length-3]
-                if screen[posi][posj]=='$' and screen[posi][posj+1]==' ' and screen[posi][posj+2]==' '
+                if screen[posi][posj]=='$' and screen[posi][posj+1]==' ' and 
+                   screen[posi][posj+2]==' '
                     break
                 line.push screen[posi][posj]
         screen_f.push line
@@ -548,7 +554,8 @@ class VimState
                         else
                             qq = qq[..].join('')   #this is for debugging
 
-                        linerange = new Range(new Point(@tlnumber+posi,0),new Point(@tlnumber + posi, 96))
+                        linerange = new Range(new Point(@tlnumber+posi,0),
+                                                new Point(@tlnumber + posi, 96))
                         options =  { normalizeLineEndings:false, undo: 'skip' }
                         current_editor.buffer.setTextInRange(linerange, qq, options)
                         dirty[posi] = false
@@ -558,9 +565,11 @@ class VimState
 
     if @cursor_visible and @location[0] <= rows - 2
         if not DEBUG
-            current_editor.setCursorBufferPosition(new Point(@tlnumber + @location[0], @location[1]-4),{autoscroll:true})
+            current_editor.setCursorBufferPosition(new Point(@tlnumber + @location[0], 
+                                                        @location[1]-4),{autoscroll:true})
         else
-            current_editor.setCursorBufferPosition(new Point(@tlnumber + @location[0], @location[1]),{autoscroll:true})
+            current_editor.setCursorBufferPosition(new Point(@tlnumber + @location[0], 
+                                                        @location[1]),{autoscroll:true})
 
   neovim_subscribe: =>
     console.log 'neovim_subscribe'
