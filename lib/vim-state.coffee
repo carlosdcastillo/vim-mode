@@ -19,7 +19,6 @@ collected = new Buffer(0)
 screen = []
 screen_f = []
 scrolled = false
-status_bar = []
 location = []
 current_editor = undefined
 editor_views = {}
@@ -275,7 +274,7 @@ class EventHandler
                                         location[1] = location[1] + 1
                                         dirty[location[0]] = true
                                     else if location[0] == @rows - 1
-                                        status_bar[location[1]] = v[0]
+                                        @vimState.status_bar[location[1]] = v[0]
                                         location[1] = location[1] + 1
                                     else if location[0] > @rows - 1
                                         console.log 'over the max'
@@ -287,7 +286,7 @@ class EventHandler
                                         screen[posi][posj] = ' '
                                         dirty[posi] = true
 
-                                    status_bar[posj] = ' '
+                                    @vimState.status_bar[posj] = ' '
 
                             else if x[0] is "eol_clear"
                                 #console.log 'eol_clear'
@@ -300,7 +299,7 @@ class EventHandler
 
                                 else if location[0] == @rows - 1
                                     for posj in [location[1]..@cols-1]
-                                        status_bar[posj] = ' '
+                                        @vimState.status_bar[posj] = ' '
                                 else if location[0] > @rows - 1
                                     console.log 'over the max'
 
@@ -342,6 +341,7 @@ class VimState
     @cursor_visible = true
     @scrolled_down = false
     @tlnumber = 0
+    @status_bar = []
 
     #
     #@area = new HighlightedAreaView(@editorView)
@@ -549,7 +549,7 @@ class VimState
                         current_editor.buffer.setTextInRange(linerange, qq, options)
                         dirty[posi] = false
 
-    sbt = status_bar.join('').trim()
+    sbt = @status_bar.join('').trim()
     @updateStatusBarWithText(sbt)
 
     if @cursor_visible and location[0] <= rows - 2
@@ -576,7 +576,7 @@ class VimState
     message = [0,1,'ui_attach',[eventHandler.cols,eventHandler.rows,true]]
     #rows = @editor.getScreenLineCount()
     location = [0,0]
-    status_bar = (' ' for ux in [1..eventHandler.cols])
+    @status_bar = (' ' for ux in [1..eventHandler.cols])
     screen = ((' ' for ux in [1..eventHandler.cols])  for uy in [1..eventHandler.rows-1])
 
     message[1] = MESSAGE_COUNTER
