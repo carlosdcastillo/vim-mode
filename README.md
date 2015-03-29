@@ -1,6 +1,7 @@
 # What is this?
 
-This is a work in progress branch that shows how to make Atom talk to Neovim.
+This is a work in progress Atom package that implements complete vim bindings
+by connecting to Neovim.
 
 # What's new?
 I've update everything to work with the version in master of
@@ -8,6 +9,10 @@ I've update everything to work with the version in master of
 
 On the [Atom](https://atom.io/) side I've tested it with version 0.175 and
 0.184 and seems to work fine.
+
+It should be usable enough that if you are adventurous you will be able to get
+day-to-day work done. There are, however, plenty of features missing, so you
+will have to be patient when you use it.
 
 # How do you run this?
 
@@ -54,12 +59,15 @@ http://www.youtube.com/watch?v=lH_zb7X6mZw
 
 # Things TO DO
 
+* Fix hiccups when editing a new file (a new tab with title undefined is
+created)
+* Make the geometry of the Atom buffer fully match the geometry of the Neovim
+buffer.
+* Find a solution to syncing when the file has a line with more than 
+96 characters.
 * Handle Atom-centric text editing actions, i.e., situations like the user
 searching and replacing in Atom by hitting Cmd-F
-* Make the scroll wheel work.
 * Handle files of more than 9999 lines.
-* Make Atom not complain about the file having been changed when it hasn't.
-More importantly make Cmd-S not make a mess of your file.
 * Make one of the following UI connections/integrations: visual selection,
 highlight search, auto completion, etc.
 
