@@ -19,7 +19,6 @@ collected = new Buffer(0)
 screen = []
 screen_f = []
 scrolled = false
-location = []
 current_editor = undefined
 editor_views = {}
 
@@ -168,8 +167,8 @@ class EventHandler
                         for x in eventInfo
                             if x[0] is "cursor_goto"
                                 for v in x[1..]
-                                    location[0] = parseInt(v[0])
-                                    location[1] = parseInt(v[1])
+                                    @vimState.location[0] = parseInt(v[0])
+                                    @vimState.location[1] = parseInt(v[1])
 
                             else if x[0] is 'set_scroll_region'
                                 #console.log x
@@ -268,15 +267,17 @@ class EventHandler
                                 cnt = 0
                                 #console.log 'put:',x[1..]
                                 for v in x[1..]
-                                    if 0<=location[0] and location[0] < @rows-1
+                                    ly = @vimState.location[0]
+                                    lx = @vimState.location[1]
+                                    if 0<=ly and ly < @rows-1
                                         qq = v[0]
-                                        screen[location[0]][location[1]] = qq[0]
-                                        location[1] = location[1] + 1
-                                        dirty[location[0]] = true
-                                    else if location[0] == @rows - 1
-                                        @vimState.status_bar[location[1]] = v[0]
-                                        location[1] = location[1] + 1
-                                    else if location[0] > @rows - 1
+                                        screen[ly][lx] = qq[0]
+                                        @vimState.location[1] = lx + 1
+                                        dirty[ly] = true
+                                    else if ly == @rows - 1
+                                        @vimState.status_bar[lx] = v[0]
+                                        @vimState.location[1] = lx + 1
+                                    else if ly > @rows - 1
                                         console.log 'over the max'
 
                             else if x[0] is "clear"
@@ -290,17 +291,19 @@ class EventHandler
 
                             else if x[0] is "eol_clear"
                                 #console.log 'eol_clear'
-                                if location[0] < @rows - 1
-                                    for posj in [location[1]..@cols-1]
-                                        for posi in [location[0]..location[0]]
+                                ly = @vimState.location[0]
+                                lx = @vimState.location[1]
+                                if ly < @rows - 1
+                                    for posj in [lx..@cols-1]
+                                        for posi in [ly..ly]
                                             if posj >= 0
                                                 dirty[posi] = true
                                                 screen[posi][posj] = ' '
 
-                                else if location[0] == @rows - 1
-                                    for posj in [location[1]..@cols-1]
+                                else if ly == @rows - 1
+                                    for posj in [lx..@cols-1]
                                         @vimState.status_bar[posj] = ' '
-                                else if location[0] > @rows - 1
+                                else if ly > @rows - 1
                                     console.log 'over the max'
 
                         @vimState.redraw_screen(@rows, dirty)
@@ -342,6 +345,7 @@ class VimState
     @scrolled_down = false
     @tlnumber = 0
     @status_bar = []
+    @location = []
 
     #
     #@area = new HighlightedAreaView(@editorView)
@@ -552,11 +556,11 @@ class VimState
     sbt = @status_bar.join('').trim()
     @updateStatusBarWithText(sbt)
 
-    if @cursor_visible and location[0] <= rows - 2
+    if @cursor_visible and @location[0] <= rows - 2
         if not DEBUG
-            current_editor.setCursorBufferPosition(new Point(@tlnumber + location[0], location[1]-4),{autoscroll:true})
+            current_editor.setCursorBufferPosition(new Point(@tlnumber + @location[0], @location[1]-4),{autoscroll:true})
         else
-            current_editor.setCursorBufferPosition(new Point(@tlnumber + location[0], location[1]),{autoscroll:true})
+            current_editor.setCursorBufferPosition(new Point(@tlnumber + @location[0], @location[1]),{autoscroll:true})
 
   neovim_subscribe: =>
     console.log 'neovim_subscribe'
@@ -575,7 +579,7 @@ class VimState
 
     message = [0,1,'ui_attach',[eventHandler.cols,eventHandler.rows,true]]
     #rows = @editor.getScreenLineCount()
-    location = [0,0]
+    @location = [0,0]
     @status_bar = (' ' for ux in [1..eventHandler.cols])
     screen = ((' ' for ux in [1..eventHandler.cols])  for uy in [1..eventHandler.rows-1])
 
