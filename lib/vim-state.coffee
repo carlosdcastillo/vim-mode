@@ -117,7 +117,7 @@ ns_redraw_win_end = () ->
 lineSpacing = ->
     lineheight = parseFloat(atom.config.get('editor.lineHeight')) 
     fontsize = parseFloat(atom.config.get('editor.fontSize'))
-    return (lineheight * fontsize)
+    return Math.floor(lineheight * fontsize)
 
 
 scrollTopChanged = () ->
@@ -142,7 +142,7 @@ class EventHandler
         qtop = current_editor.getScrollTop()
         qbottom = current_editor.getScrollBottom()
 
-        @rows = Math.trunc((qbottom - qtop)/lineSpacing())
+        @rows = Math.floor((qbottom - qtop)/lineSpacing()+1)
         console.log 'rows:', @rows
 
         @cols = 100
@@ -534,7 +534,7 @@ class VimState
     else
         @tlnumber = tlnumberarr[0]
 
-    current_editor.setScrollTop(Math.trunc(lineSpacing()*@tlnumber))
+    current_editor.setScrollTop(lineSpacing()*@tlnumber)
     
     if dirty
         onedirty = false
