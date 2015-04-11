@@ -95,6 +95,7 @@ ns_redraw_win_end = () ->
                             for i in [0..nl-1]
                                 diff = diff + '\n'
                             current_editor.buffer.append(diff, true)
+                            neovim_send_message([0,1,'vim_command',['redraw!']])
                         else if current_editor.buffer.getLastRow() > parseInt(nLines)
                             for i in [parseInt(nLines)..current_editor.buffer.getLastRow()]
                                 current_editor.buffer.deleteRow(i)
@@ -169,7 +170,6 @@ class EventHandler
                                     @vimState.location[1] = parseInt(v[1])
 
                             else if x[0] is 'set_scroll_region'
-                                #console.log x
                                 @screen_top = parseInt(x[1][0])
                                 @screen_bot = parseInt(x[1][1])
                                 @screen_left = parseInt(x[1][2])
@@ -287,7 +287,6 @@ class EventHandler
                                     @vimState.status_bar[posj] = ' '
 
                             else if x[0] is "eol_clear"
-                                #console.log 'eol_clear'
                                 ly = @vimState.location[0]
                                 lx = @vimState.location[1]
                                 if ly < @rows - 1
@@ -507,7 +506,7 @@ class VimState
         line = undefined
         if screen[posi]
             line = []
-            for posj in [0..screen[posi].length-3]
+            for posj in [0..screen[posi].length-2]
                 if screen[posi][posj]=='$' and screen[posi][posj+1]==' ' and 
                    screen[posi][posj+2]==' '
                     break
@@ -534,8 +533,6 @@ class VimState
     else
         @tlnumber = tlnumberarr[0]
 
-    current_editor.setScrollTop(lineSpacing()*@tlnumber)
-    
     if dirty
         onedirty = false
         for posi in [0..rows-2]
@@ -570,6 +567,8 @@ class VimState
         else
             current_editor.setCursorBufferPosition(new Point(@tlnumber + @location[0], 
                                                         @location[1]),{autoscroll:true})
+
+    current_editor.setScrollTop(lineSpacing()*@tlnumber)
 
   neovim_subscribe: =>
     console.log 'neovim_subscribe'
@@ -668,8 +667,8 @@ class VimState
     @updateStatusBar()
 
   changeModeClass: (targetMode) ->
-    console.log 'query time:',current_editor.getURI()
-    console.log 'editor_views:',editor_views
+    #console.log 'query time:',current_editor.getURI()
+    #console.log 'editor_views:',editor_views
     editorview = editor_views[current_editor.getURI()]
     for mode in ['command-mode', 'insert-mode', 'visual-mode', 
                 'operator-pending-mode', 'invisible-mode']
