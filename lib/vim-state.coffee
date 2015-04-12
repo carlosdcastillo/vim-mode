@@ -79,7 +79,6 @@ ns_redraw_win_end = () ->
         return
 
     neovim_send_message([0,1,'vim_eval',['&modified']], (mod) =>
-        console.log 'mod:',mod
         q = '.tab-bar .tab [data-path*="'
         q  = q.concat(current_editor.getURI())
         q = q.concat('"]')
@@ -90,11 +89,15 @@ ns_redraw_win_end = () ->
             if tabelement
                 if parseInt(mod) == 1
                     tabelement.classList.add('modified')
+                    tabelement.isModified = true
                 else
                     tabelement.classList.remove('modified')
+                    tabelement.isModified = false
 
     )
+
     focused = editor_views[current_editor.getURI()].classList.contains('is-focused')
+
     if focused 
         neovim_send_message([0,1,'vim_eval',["expand('%:p')"]], (filename) =>
             #console.log 'filename reported by vim:',filename
@@ -135,6 +138,9 @@ lineSpacing = ->
     fontsize = parseFloat(atom.config.get('editor.fontSize'))
     return Math.floor(lineheight * fontsize)
 
+vim_mode_save_file = () ->
+    console.log 'inside neovim save file'
+    neovim_send_message([0,1,'vim_command',['write']])
 
 scrollTopChanged = () ->
     if not internal_change
@@ -401,6 +407,10 @@ class VimState
 
     #atom.workspaceView.on 'pane-container:active-pane-item-changed', @activePaneChanged
     atom.workspace.onDidChangeActivePaneItem @activePaneChanged
+    atom.commands.add 'atom-text-editor', 'core:save', (e) -> 
+        e.preventDefault()
+        e.stopPropagation()
+        vim_mode_save_file()
 
     @editorView.onkeypress = (e) =>
         if @editorView.classList.contains('is-focused')
@@ -503,6 +513,10 @@ class VimState
     neovim_send_message([0,1,'vim_command',['set expandtab']])
     neovim_send_message([0,1,'vim_command',['set hidden']])
     neovim_send_message([0,1,'vim_command',['set list']])
+    neovim_send_message([0,1,'vim_command',['set wildmenu']])
+    neovim_send_message([0,1,'vim_command',['set showcmd']])
+    neovim_send_message([0,1,'vim_command',['set incsearch']])
+    neovim_send_message([0,1,'vim_command',['set autoread']])
     neovim_send_message([0,1,'vim_command',['set backspace=indent,eol,start']])
     neovim_send_message([0,1,'vim_command',['redraw!']])
 
@@ -668,7 +682,6 @@ class VimState
     @deactivateInsertMode()
     @mode = 'visual'
     @changeModeClass('visual-mode')
-
     @updateStatusBar()
 
   # Private: Used to enable operator-pending mode.
@@ -677,7 +690,6 @@ class VimState
     @mode = 'operator-pending'
     @submodule = null
     @changeModeClass('operator-pending-mode')
-
     @updateStatusBar()
 
   changeModeClass: (targetMode) ->
