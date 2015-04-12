@@ -292,7 +292,8 @@ class EventHandler
                                         @vimState.location[1] = lx + 1
                                         dirty[ly] = true
                                     else if ly == @rows - 1
-                                        @vimState.status_bar[lx] = v[0]
+                                        qq = v[0]
+                                        @vimState.status_bar[lx] = qq[0]
                                         @vimState.location[1] = lx + 1
                                     else if ly > @rows - 1
                                         console.log 'over the max'
@@ -585,7 +586,7 @@ class VimState
                         current_editor.buffer.setTextInRange(linerange, qq, options)
                         dirty[posi] = false
 
-    sbt = @status_bar.join('').trim()
+    sbt = @status_bar.join('')
     @updateStatusBarWithText(sbt)
 
     if @cursor_visible and @location[0] <= rows - 2
@@ -704,6 +705,7 @@ class VimState
             editorview.classList.remove(mode)
 
   updateStatusBarWithText:(text) ->
+    text = text.split(' ').join('&nbsp;')
     element.innerHTML = text
 
   updateStatusBar: ->
