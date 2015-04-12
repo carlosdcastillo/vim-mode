@@ -78,6 +78,22 @@ ns_redraw_win_end = () ->
     if not editor_views[current_editor.getURI()]
         return
 
+    neovim_send_message([0,1,'vim_eval',['&modified']], (mod) =>
+        console.log 'mod:',mod
+        q = '.tab-bar .tab [data-path*="'
+        q  = q.concat(current_editor.getURI())
+        q = q.concat('"]')
+
+        tabelement = document.querySelector(q)
+        if tabelement
+            tabelement = tabelement.parentNode
+            if tabelement
+                if parseInt(mod) == 1
+                    tabelement.classList.add('modified')
+                else
+                    tabelement.classList.remove('modified')
+
+    )
     focused = editor_views[current_editor.getURI()].classList.contains('is-focused')
     if focused 
         neovim_send_message([0,1,'vim_eval',["expand('%:p')"]], (filename) =>
@@ -99,7 +115,6 @@ ns_redraw_win_end = () ->
                         else if current_editor.buffer.getLastRow() > parseInt(nLines)
                             for i in [parseInt(nLines)..current_editor.buffer.getLastRow()]
                                 current_editor.buffer.deleteRow(i)
-
 
 
                         lines = current_editor.buffer.getLines()
@@ -135,7 +150,6 @@ scrollTopChanged = () ->
                     neovim_send_message([0,1,'vim_input',['<ScrollWheelDown>']])
 
     scrolltop = current_editor.getScrollTop()
-
 
 
 class EventHandler
