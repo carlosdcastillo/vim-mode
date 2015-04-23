@@ -8,7 +8,7 @@ msgpack = require './msgpack'
 
 HighlightedAreaView = require './highlighted-area-view'
 
-CONNECT_TO = '/tmp/neovim/neovim581'
+CONNECT_TO = '\\\\.\\pipe\\neovim581'
 MESSAGE_COUNTER = 1
 DEBUG = false
 
@@ -43,6 +43,11 @@ range = (start, stop, step) ->
         result.push i
         i += step
     result
+
+normalize_filename = (filename) ->
+    if filename
+        filename = filename.split('\\').join('/')
+    return filename
 
 neovim_send_message = (message,f = undefined) ->
     try
@@ -85,6 +90,7 @@ ns_redraw_win_end = () ->
         q = '.tab-bar .tab [data-path*="'
         q = q.concat(current_editor.getURI())
         q = q.concat('"]')
+        console.log q
 
         tabelement = document.querySelector(q)
         if tabelement
@@ -107,7 +113,15 @@ ns_redraw_win_end = () ->
         neovim_send_message([0,1,'vim_eval',["expand('%:p')"]], (filename) =>
             #console.log 'filename reported by vim:',filename
             #console.log 'current editor uri:',current_editor.getURI()
-            if filename and current_editor.getURI() and filename isnt current_editor.getURI()
+
+            ncefn =  normalize_filename(current_editor.getURI())
+            nfn = normalize_filename(filename)
+            console.log 'filename reported by vim:',nfn
+            console.log 'current editor uri:',ncefn
+
+
+
+            if filename and current_editor.getURI() and nfn isnt ncefn
                 console.log 'trying to open using atom'
                 atom.workspace.open(filename)
             else
