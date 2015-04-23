@@ -10,8 +10,8 @@ HighlightedAreaView = require './highlighted-area-view'
 
 CONNECT_TO = '/tmp/neovim/neovim581'
 MESSAGE_COUNTER = 1
-
 DEBUG = false
+
 subscriptions = {}
 subscriptions['redraw'] = false
 socket_subs = null
@@ -73,14 +73,17 @@ neovim_send_message = (message,f = undefined) ->
 
 
 ns_redraw_win_end = () ->
+
     if not current_editor
         return
+
     if not editor_views[current_editor.getURI()]
         return
 
     neovim_send_message([0,1,'vim_eval',['&modified']], (mod) =>
+
         q = '.tab-bar .tab [data-path*="'
-        q  = q.concat(current_editor.getURI())
+        q = q.concat(current_editor.getURI())
         q = q.concat('"]')
 
         tabelement = document.querySelector(q)
@@ -88,10 +91,12 @@ ns_redraw_win_end = () ->
             tabelement = tabelement.parentNode
             if tabelement
                 if parseInt(mod) == 1
-                    tabelement.classList.add('modified')
+                    if not tabelement.classList.contains('modified')
+                        tabelement.classList.add('modified')
                     tabelement.isModified = true
                 else
-                    tabelement.classList.remove('modified')
+                    if tabelement.classList.contains('modified')
+                        tabelement.classList.remove('modified')
                     tabelement.isModified = false
 
     )
@@ -102,7 +107,7 @@ ns_redraw_win_end = () ->
         neovim_send_message([0,1,'vim_eval',["expand('%:p')"]], (filename) =>
             #console.log 'filename reported by vim:',filename
             #console.log 'current editor uri:',current_editor.getURI()
-            if filename isnt current_editor.getURI()
+            if filename and current_editor.getURI() and filename isnt current_editor.getURI()
                 console.log 'trying to open using atom'
                 atom.workspace.open(filename)
             else
@@ -705,8 +710,9 @@ class VimState
             editorview.classList.remove(mode)
 
   updateStatusBarWithText:(text) ->
-    text = text.split(' ').join('&nbsp;')
-    element.innerHTML = text
+    q = '<samp>'
+    qend = '</samp>'
+    element.innerHTML = q.concat(text).concat(qend)
 
   updateStatusBar: ->
     element.innerHTML = @mode
