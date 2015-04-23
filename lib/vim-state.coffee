@@ -3,12 +3,17 @@ $ = require  'jquery'
 {Point, Range} = require 'atom'
 Marker = require 'atom'
 net = require 'net'
+os = require 'os'
 MarkerView = require './marker-view'
 msgpack = require './msgpack'
 
 HighlightedAreaView = require './highlighted-area-view'
 
-CONNECT_TO = '\\\\.\\pipe\\neovim581'
+if os.platform() is 'win32'
+    CONNECT_TO = '\\\\.\\pipe\\neovim581'
+else
+    CONNECT_TO = '/tmp/neovim/neovim581'
+
 MESSAGE_COUNTER = 1
 DEBUG = false
 
