@@ -721,12 +721,13 @@ class VimState
     #console.log 'query time:',current_editor.getURI()
     #console.log 'editor_views:',editor_views
     editorview = editor_views[current_editor.getURI()]
-    for mode in ['command-mode', 'insert-mode', 'visual-mode', 
-                'operator-pending-mode', 'invisible-mode']
-        if mode is targetMode
-            editorview.classList.add(mode)
-        else
-            editorview.classList.remove(mode)
+    if editorview
+        for mode in ['command-mode', 'insert-mode', 'visual-mode', 
+                    'operator-pending-mode', 'invisible-mode']
+            if mode is targetMode
+                editorview.classList.add(mode)
+            else
+                editorview.classList.remove(mode)
 
   updateStatusBarWithText:(text) ->
     q = '<samp>'
