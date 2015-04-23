@@ -25,13 +25,22 @@ Install vim-mode
     $ cd vim-mode
     $ apm install # install dependencies
 
-Create a folder for the socket
+On OS X and Linux, create a folder for the named pipe:
 
     $ mkdir -p /tmp/neovim
 
-Run Neovim, pointing it to the socket
+Run Neovim, pointing it to the named pipe, on OS X and Linux:
 
     $ NVIM_LISTEN_ADDRESS=/tmp/neovim/neovim581 nvim 
+
+The equivalent in Windows (define an environment variable and point it to the
+named pipe) is:
+
+    set NVIM_LISTEN_ADDRESS=\\.\pipe\neovim581
+
+and then
+
+    nvim.exe
 
 # What do you want to do with this?
 
@@ -40,8 +49,8 @@ This project aims to:
 * Bring real vim bindings to Atom.
 * Give the abstract-ui neovim functionality a work out and find issues using
 the msgpack api.
-* Eventually build an editor that I would find useful. At the current state it is
-pre-alpha.
+* Eventually build an editor that I would find useful. At the current state it
+is pre-alpha.
 
 # See it in action
 
@@ -49,11 +58,13 @@ A video that shows the integration in action in March/2015:
 
 https://www.youtube.com/watch?v=7TVBcdONEJo
 
-An older video from January of the integration in action, using the abstract-ui branch:
+An older video from January of the integration in action, using the abstract-ui
+branch:
 
 https://www.youtube.com/watch?v=yluIxQRjUCk
 
-and this is an old video from 2014 using the old redraw-events branch (from mid 2014):
+and this is an old video from 2014 using the old redraw-events branch (from mid
+2014):
 
 http://www.youtube.com/watch?v=lH_zb7X6mZw
 
