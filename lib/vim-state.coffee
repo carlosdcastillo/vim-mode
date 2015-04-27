@@ -26,13 +26,14 @@ screen_f = []
 scrolled = false
 current_editor = undefined
 editor_views = {}
+active_change = true
 
 scrolltopchange_subscription = undefined
 scrolltop = undefined
 internal_change = false
 
 element = document.createElement("item-view")
-setInterval ( => ns_redraw_win_end()), 500
+setInterval ( => ns_redraw_win_end()), 150
 
 range = (start, stop, step) ->
     if typeof stop is "undefined"
@@ -84,18 +85,25 @@ neovim_send_message = (message,f = undefined) ->
 
 ns_redraw_win_end = () ->
 
+
+    current_editor = atom.workspace.getActiveTextEditor()
+
     if not current_editor
         return
 
-    if not editor_views[current_editor.getURI()]
+    uri = current_editor.getURI()
+
+    editor_views[uri] = atom.views.getView(current_editor)
+
+    if not editor_views[uri]
         return
 
     neovim_send_message([0,1,'vim_eval',['&modified']], (mod) =>
 
         q = '.tab-bar .tab [data-path*="'
-        q = q.concat(current_editor.getURI())
+        q = q.concat(uri)
         q = q.concat('"]')
-        console.log q
+        #console.log q
 
         tabelement = document.querySelector(q)
         if tabelement
@@ -112,23 +120,22 @@ ns_redraw_win_end = () ->
 
     )
 
-    focused = editor_views[current_editor.getURI()].classList.contains('is-focused')
 
-    if focused 
+    focused = editor_views[uri].classList.contains('is-focused')
+
+    if true
         neovim_send_message([0,1,'vim_eval',["expand('%:p')"]], (filename) =>
             #console.log 'filename reported by vim:',filename
-            #console.log 'current editor uri:',current_editor.getURI()
+            #console.log 'current editor uri:',uri
 
-            ncefn =  normalize_filename(current_editor.getURI())
+            ncefn =  normalize_filename(uri)
             nfn = normalize_filename(filename)
-            console.log 'filename reported by vim:',nfn
-            console.log 'current editor uri:',ncefn
 
-
-
-            if filename and current_editor.getURI() and nfn isnt ncefn
-                console.log 'trying to open using atom'
+            if ncefn and nfn and nfn isnt ncefn
+                console.log '-------------------------------',nfn
+                console.log '*******************************',ncefn
                 atom.workspace.open(filename)
+                
             else
                 neovim_send_message([0,1,'vim_eval',["line('$')"]], (nLines) =>
                     if current_editor
@@ -156,6 +163,18 @@ ns_redraw_win_end = () ->
 
                 )
             )
+
+    active_change = false
+    for texteditor in atom.workspace.getTextEditors()
+        turi = texteditor.getURI()
+        if turi
+            console.log 'TURI:',turi
+            if turi[turi.length-1] is '~' or 'undefined' in turi
+                texteditor.destroy()
+        else
+            texteditor.destroy()
+            
+    active_change = true
 
 lineSpacing = ->
     lineheight = parseFloat(atom.config.get('editor.lineHeight')) 
@@ -504,24 +523,26 @@ class VimState
 
 
   activePaneChanged: =>
-    try
-        neovim_send_message([0,1,'vim_command',['e '+
-                            atom.workspace.getActiveTextEditor().getURI()]],(x) =>
-            if scrolltopchange_subscription
-                scrolltopchange_subscription.dispose()
+    if active_change
+        try
 
-            current_editor = atom.workspace.getActiveTextEditor()
-            scrolltopchange_subscription = 
-                current_editor.onDidChangeScrollTop scrollTopChanged 
-            scrolltop = undefined
+            filename = atom.workspace.getActiveTextEditor().getURI()
+            neovim_send_message([0,1,'vim_command',['e '+ filename]],(x) =>
+                if scrolltopchange_subscription
+                    scrolltopchange_subscription.dispose()
 
-            @tlnumber = 0
-            @afterOpen()
-        )
-    catch err
+                current_editor = atom.workspace.getActiveTextEditor()
+                scrolltopchange_subscription = 
+                    current_editor.onDidChangeScrollTop scrollTopChanged 
+                scrolltop = undefined
 
-        console.log err
-        console.log 'problem changing panes'
+                @tlnumber = 0
+                @afterOpen()
+            )
+        catch err
+
+            console.log err
+            console.log 'problem changing panes'
 
   afterOpen: =>
     #console.log 'in after open'
