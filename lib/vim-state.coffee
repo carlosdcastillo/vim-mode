@@ -169,10 +169,8 @@ ns_redraw_win_end = () ->
         turi = texteditor.getURI()
         if turi
             console.log 'TURI:',turi
-            if turi[turi.length-1] is '~' or 'undefined' in turi
+            if turi[turi.length-1] is '~'
                 texteditor.destroy()
-        else
-            texteditor.destroy()
             
     active_change = true
 
@@ -532,8 +530,9 @@ class VimState
                     scrolltopchange_subscription.dispose()
 
                 current_editor = atom.workspace.getActiveTextEditor()
-                scrolltopchange_subscription = 
-                    current_editor.onDidChangeScrollTop scrollTopChanged 
+                if current_editor
+                    scrolltopchange_subscription = 
+                        current_editor.onDidChangeScrollTop scrollTopChanged 
                 scrolltop = undefined
 
                 @tlnumber = 0

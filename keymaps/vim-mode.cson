@@ -1,8 +1,9 @@
 'atom-text-editor.vim-mode':
-  'enter': 'core:cancel',
+  'enter': 'core:cancel'
   'backspace': 'core:cancel'
   'ctrl-b': 'core:cancel'
   'ctrl-f': 'core:cancel'
+  'ctrl-n': 'core:cancel'
   'tab': 'core:cancel'
   'end': 'core:cancel' 
   'home': 'core:cancel' 
@@ -11,3 +12,6 @@
   'down': 'core:cancel'
   'left': 'core:cancel'
   'right': 'core:cancel'
+
+'.platform-win32 .editor':
+  'ctrl-r': 'unset!'
