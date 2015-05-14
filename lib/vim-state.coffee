@@ -5,7 +5,9 @@ Marker = require 'atom'
 net = require 'net'
 os = require 'os'
 MarkerView = require './marker-view'
-msgpack = require './msgpack'
+util = require 'util'
+
+Session = require 'msgpack5rpc'
 
 HighlightedAreaView = require './highlighted-area-view'
 
@@ -19,8 +21,6 @@ DEBUG = false
 
 subscriptions = {}
 subscriptions['redraw'] = false
-socket_subs = null
-collected = new Buffer(0)
 screen = []
 screen_f = []
 scrolled = false
@@ -55,36 +55,40 @@ normalize_filename = (filename) ->
         filename = filename.split('\\').join('/')
     return filename
 
+
+socket2 = new net.Socket()
+socket2.connect(CONNECT_TO)
+socket2.on('error', (error) =>
+  console.log 'error communicating (send message): ' + error
+  socket2.destroy()
+)
+session = new Session()
+session.attach(socket2, socket2)
+ 
+buf2str = (buffer) ->
+  if not buffer
+     return ''
+  res = ''
+  i = 0
+  while i < buffer.length
+    res = res + String.fromCharCode(buffer[i])
+    i++
+  res
+
 neovim_send_message = (message,f = undefined) ->
     try
-        socket2 = new net.Socket()
-        socket2.connect(CONNECT_TO)
-        socket2.on('error', (error) =>
-          console.log 'error communicating (send message): ' + error
-          socket2.destroy()
-        )
-        #socket2.on('end', =>
-          #socket2.destroy()
-        #)
-        socket2.on('data', (data) =>
-          {value:q, trailing:t} = msgpack.decode_pub(msgpack.to_uint8array(data))
-          if t isnt 0
-              console.log 'not reliable'
-          if f
-              f(q[3])
-          socket2.destroy()
-        )
-        message[1] = MESSAGE_COUNTER
-        MESSAGE_COUNTER = (MESSAGE_COUNTER + 1) % 256
-        msg2 = msgpack.encode_pub(message)
-        #socket2.write(msg2, => socket2.end())
-        socket2.write(msg2)
+        session.request(message[2], message[3], (err, res) -> if f 
+                                                                  if typeof(res) is 'number'
+                                                                      f(util.inspect(res))
+                                                                  else
+                                                                      f(buf2str(res))
+
+                       )
     catch err
         console.log 'error in neovim_send_message '+err
 
 
 ns_redraw_win_end = () ->
-
 
     current_editor = atom.workspace.getActiveTextEditor()
 
@@ -168,7 +172,6 @@ ns_redraw_win_end = () ->
     for texteditor in atom.workspace.getTextEditors()
         turi = texteditor.getURI()
         if turi
-            console.log 'TURI:',turi
             if turi[turi.length-1] is '~'
                 texteditor.destroy()
             
@@ -210,178 +213,159 @@ class EventHandler
         @cols = 100
         @command_mode = true
 
-    handleEvent: (data) =>
+    handleEvent: (event, q) =>
+        if q.length is 0 
+            return
         internal_change = true
         dirty = (false for i in [0..@rows-2])
-        collected = Buffer.concat([collected, data])
-        i = collected.length
-        while i >= 1
-            try
-                v = collected.slice(0,i)
-                {value:q,trailing} = msgpack.decode_pub(msgpack.to_uint8array(v))
-                if trailing >= 0
-                    #console.log 'subscribe',q
-                    [bufferId, eventName, eventInfo] = q
-                    if eventName is "redraw"
-                        #console.log "eventInfo", eventInfo
-                        for x in eventInfo
-                            if x[0] is "cursor_goto"
-                                for v in x[1..]
-                                    @vimState.location[0] = parseInt(v[0])
-                                    @vimState.location[1] = parseInt(v[1])
 
-                            else if x[0] is 'set_scroll_region'
-                                @screen_top = parseInt(x[1][0])
-                                @screen_bot = parseInt(x[1][1])
-                                @screen_left = parseInt(x[1][2])
-                                @screen_right = parseInt(x[1][3])
+        if event is "redraw"
+            #console.log "eventInfo", eventInfo
+            for x in q
+                x[0] = buf2str(x[0])
+                if x[0] is "cursor_goto"
+                    for v in x[1..]
+                        v[0] = util.inspect(v[0])
+                        v[1] = util.inspect(v[1])
+                        @vimState.location[0] = parseInt(v[0])
+                        @vimState.location[1] = parseInt(v[1])
 
-                            else if x[0] is "insert_mode"
-                                @vimState.activateInsertMode()
-                                @command_mode = false
+                else if x[0] is 'set_scroll_region'
+                    @screen_top = parseInt(util.inspect(x[1][0]))
+                    @screen_bot = parseInt(util.inspect(x[1][1]))
+                    @screen_left = parseInt(util.inspect(x[1][2]))
+                    @screen_right = parseInt(util.inspect(x[1][3]))
 
-                            else if x[0] is "normal_mode"
-                                @vimState.activateCommandMode()
-                                @command_mode = true
+                else if x[0] is "insert_mode"
+                    @vimState.activateInsertMode()
+                    @command_mode = false
 
-                            else if x[0] is "bell"
-                                atom.beep()
+                else if x[0] is "normal_mode"
+                    @vimState.activateCommandMode()
+                    @command_mode = true
 
-                            else if x[0] is "cursor_on"
-                                if @command_mode
-                                    @vimState.activateCommandMode()
-                                else
-                                    @vimState.activateInsertMode()
-                                @vimState.cursor_visible = true
+                else if x[0] is "bell"
+                    atom.beep()
 
-                            else if x[0] is "cursor_off"
-                                @vimState.activateInvisibleMode()
-                                @vimState.cursor_visible = false
+                else if x[0] is "cursor_on"
+                    if @command_mode
+                        @vimState.activateCommandMode()
+                    else
+                        @vimState.activateInsertMode()
+                    @vimState.cursor_visible = true
 
-                            else if x[0] is "scroll"
-                                for v in x[1..]
-                                    top = @screen_top
-                                    bot = @screen_bot + 1
+                else if x[0] is "cursor_off"
+                    @vimState.activateInvisibleMode()
+                    @vimState.cursor_visible = false
 
-                                    left = @screen_left
-                                    right = @screen_right + 1
+                else if x[0] is "scroll"
+                    for v in x[1..]
+                        top = @screen_top
+                        bot = @screen_bot + 1
 
-                                    count = parseInt(v[0])
-                                    #console.log 'scrolling:',count
-                                    #tlnumber = tlnumber + count
-                                    if count > 0
-                                        src_top = top+count
-                                        src_bot = bot
-                                        dst_top = top
-                                        dst_bot = bot - count
-                                        clr_top = dst_bot
-                                        clr_bot = src_bot
+                        left = @screen_left
+                        right = @screen_right + 1
 
-                                    else
-                                        src_top = top
-                                        src_bot = bot + count
-                                        dst_top = top - count
-                                        dst_bot = bot
-                                        clr_top = src_top
-                                        clr_bot = dst_top
+                        count = parseInt(util.inspect(v[0]))
+                        #console.log 'scrolling:',count
+                        #tlnumber = tlnumber + count
+                        if count > 0
+                            src_top = top+count
+                            src_bot = bot
+                            dst_top = top
+                            dst_bot = bot - count
+                            clr_top = dst_bot
+                            clr_bot = src_bot
 
-                                    #for posi in range(clr_top,clr_bot)
-                                        #for posj in range(left,right)
-                                            #screen[posi][posj] = ' '
+                        else
+                            src_top = top
+                            src_bot = bot + count
+                            dst_top = top - count
+                            dst_bot = bot
+                            clr_top = src_top
+                            clr_bot = dst_top
 
-                                    top = @screen_top
-                                    bottom = @screen_bot
-                                    left = @screen_left
-                                    right = @screen_right
-                                    #console.log 'left:',left
-                                    if count > 0
-                                        start = top
-                                        stop = bottom - count + 1
-                                        step = 1
-                                    else
-                                        start = bottom
-                                        stop = top - count + 1
-                                        step = -1
+                        #for posi in range(clr_top,clr_bot)
+                            #for posj in range(left,right)
+                                #screen[posi][posj] = ' '
 
-                                    for row in range(start,stop,step)
+                        top = @screen_top
+                        bottom = @screen_bot
+                        left = @screen_left
+                        right = @screen_right
+                        #console.log 'left:',left
+                        if count > 0
+                            start = top
+                            stop = bottom - count + 1
+                            step = 1
+                        else
+                            start = bottom
+                            stop = top - count + 1
+                            step = -1
 
-                                        dirty[row] = true
-                                        target_row = screen[row]
-                                        source_row = screen[row + count]
-                                        for col in range(left,right+1)
-                                            target_row[col] = source_row[col]
+                        for row in range(start,stop,step)
 
-                                    for row in  range(stop, stop+count,step)
-                                        for col in  range(left,right+1)
-                                            screen[row][col] = ' '
+                            dirty[row] = true
+                            target_row = screen[row]
+                            source_row = screen[row + count]
+                            for col in range(left,right+1)
+                                target_row[col] = source_row[col]
 
-                                    scrolled = true
-                                    if count > 0
-                                        @vimState.scrolled_down = true
-                                    else
-                                        @vimState.scrolled_down = false
+                        for row in  range(stop, stop+count,step)
+                            for col in  range(left,right+1)
+                                screen[row][col] = ' '
 
-                            else if x[0] is "put"
-                                cnt = 0
-                                #console.log 'put:',x[1..]
-                                for v in x[1..]
-                                    ly = @vimState.location[0]
-                                    lx = @vimState.location[1]
-                                    if 0<=ly and ly < @rows-1
-                                        qq = v[0]
-                                        screen[ly][lx] = qq[0]
-                                        @vimState.location[1] = lx + 1
-                                        dirty[ly] = true
-                                    else if ly == @rows - 1
-                                        qq = v[0]
-                                        @vimState.status_bar[lx] = qq[0]
-                                        @vimState.location[1] = lx + 1
-                                    else if ly > @rows - 1
-                                        console.log 'over the max'
+                        scrolled = true
+                        if count > 0
+                            @vimState.scrolled_down = true
+                        else
+                            @vimState.scrolled_down = false
 
-                            else if x[0] is "clear"
-                                #console.log 'clear'
-                                for posj in [0..@cols-1]
-                                    for posi in [0..@rows-2]
-                                        screen[posi][posj] = ' '
-                                        dirty[posi] = true
+                else if x[0] is "put"
+                    cnt = 0
+                    #console.log 'put:',x[1..]
+                    for v in x[1..]
+                        v[0] = buf2str(v[0])
+                        ly = @vimState.location[0]
+                        lx = @vimState.location[1]
+                        if 0<=ly and ly < @rows-1
+                            qq = v[0]
+                            screen[ly][lx] = qq[0]
+                            @vimState.location[1] = lx + 1
+                            dirty[ly] = true
+                        else if ly == @rows - 1
+                            qq = v[0]
+                            @vimState.status_bar[lx] = qq[0]
+                            @vimState.location[1] = lx + 1
+                        else if ly > @rows - 1
+                            console.log 'over the max'
 
-                                    @vimState.status_bar[posj] = ' '
+                else if x[0] is "clear"
+                    #console.log 'clear'
+                    for posj in [0..@cols-1]
+                        for posi in [0..@rows-2]
+                            screen[posi][posj] = ' '
+                            dirty[posi] = true
 
-                            else if x[0] is "eol_clear"
-                                ly = @vimState.location[0]
-                                lx = @vimState.location[1]
-                                if ly < @rows - 1
-                                    for posj in [lx..@cols-1]
-                                        for posi in [ly..ly]
-                                            if posj >= 0
-                                                dirty[posi] = true
-                                                screen[posi][posj] = ' '
+                        @vimState.status_bar[posj] = ' '
 
-                                else if ly == @rows - 1
-                                    for posj in [lx..@cols-1]
-                                        @vimState.status_bar[posj] = ' '
-                                else if ly > @rows - 1
-                                    console.log 'over the max'
+                else if x[0] is "eol_clear"
+                    ly = @vimState.location[0]
+                    lx = @vimState.location[1]
+                    if ly < @rows - 1
+                        for posj in [lx..@cols-1]
+                            for posi in [ly..ly]
+                                if posj >= 0
+                                    dirty[posi] = true
+                                    screen[posi][posj] = ' '
 
-                        @vimState.redraw_screen(@rows, dirty)
+                    else if ly == @rows - 1
+                        for posj in [lx..@cols-1]
+                            @vimState.status_bar[posj] = ' '
+                    else if ly > @rows - 1
+                        console.log 'over the max'
 
-                    i = i - trailing
-                    #console.log 'found message at:',i
-                    collected = collected.slice(i,collected.length)
-                    i = collected.length
-
-                else
-
-                    #@redraw_screen(rows)
-                    break
-
-            catch err
-                #console.log err,i,collected.length
-                console.log err
-                console.log 'stack:',err.stack
-                @vimState.redraw_screen(@rows, null)
-                break
+            @vimState.redraw_screen(@rows, dirty)
 
         if scrolled
             neovim_send_message([0,1,'vim_command',['redraw!']])
@@ -424,22 +408,6 @@ class VimState
         element.innerHTML = ''
         @statusbar = document.querySelector('status-bar').addLeftTile(item:element,
                                                                         priority:10 )
-
-    socket = new net.Socket()
-    socket.connect(CONNECT_TO)
-
-    socket.on('data', (data) =>
-        {value:q,trailing} = msgpack.decode_pub(msgpack.to_uint8array(data))
-        #console.log q
-        #console.log trailing
-        qq = q[3][1]
-        #console.log 'data:',qq
-
-        socket.end()
-        socket.destroy()
-    )
-    msg = msgpack.encode_pub([0,1,'vim_get_api_info',[]])
-    socket.write(msg)
 
     #if not subscriptions['redraw']
     #@neovim_subscribe()
@@ -512,12 +480,6 @@ class VimState
             #console.log 'MESSAGE_COUNTER',MESSAGE_COUNTER
             #msg2 = encode_pub(message)
 
-            #socket_subs.write(msg2)
-            #socket_subs.end()
-            #socket_subs.destroy()
-            #socket_subs = null
-
-            #collected = new Buffer(0)
 
 
   activePaneChanged: =>
@@ -645,30 +607,18 @@ class VimState
 
   neovim_subscribe: =>
     console.log 'neovim_subscribe'
-    if socket_subs == null
-        socket_subs = new net.Socket()
-        socket_subs.connect(CONNECT_TO)
-        collected = new Buffer(0)
-
-    socket_subs.on('error', (error) =>
-      console.log 'error communicating (subscribe)'
-    )
 
     eventHandler = new EventHandler this
 
-    socket_subs.on('data', eventHandler.handleEvent)
-
     message = [0,1,'ui_attach',[eventHandler.cols,eventHandler.rows,true]]
+    neovim_send_message(message)
+
+    session.on('notification', eventHandler.handleEvent)
     #rows = @editor.getScreenLineCount()
     @location = [0,0]
     @status_bar = (' ' for ux in [1..eventHandler.cols])
     screen = ((' ' for ux in [1..eventHandler.cols])  for uy in [1..eventHandler.rows-1])
 
-    message[1] = MESSAGE_COUNTER
-    MESSAGE_COUNTER = (MESSAGE_COUNTER + 1) % 256
-    console.log 'MESSAGE_COUNTER',MESSAGE_COUNTER
-    msg2 = msgpack.encode_pub(message)
-    socket_subs.write(msg2)
     subscriptions['redraw'] = true
 
 
