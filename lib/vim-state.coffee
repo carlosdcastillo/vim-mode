@@ -214,7 +214,7 @@ class EventHandler
         @command_mode = true
 
     handleEvent: (event, q) =>
-        if q.length is 0 
+        if q.length is 0
             return
         internal_change = true
         dirty = (false for i in [0..@rows-2])
@@ -222,13 +222,18 @@ class EventHandler
         if event is "redraw"
             #console.log "eventInfo", eventInfo
             for x in q
+                if not x
+                    continue
                 x[0] = buf2str(x[0])
                 if x[0] is "cursor_goto"
                     for v in x[1..]
-                        v[0] = util.inspect(v[0])
-                        v[1] = util.inspect(v[1])
-                        @vimState.location[0] = parseInt(v[0])
-                        @vimState.location[1] = parseInt(v[1])
+                        try
+                            v[0] = util.inspect(v[0])
+                            v[1] = util.inspect(v[1])
+                            @vimState.location[0] = parseInt(v[0])
+                            @vimState.location[1] = parseInt(v[1])
+                        catch
+                            console.log 'problem in goto'
 
                 else if x[0] is 'set_scroll_region'
                     @screen_top = parseInt(util.inspect(x[1][0]))
@@ -260,85 +265,92 @@ class EventHandler
 
                 else if x[0] is "scroll"
                     for v in x[1..]
-                        top = @screen_top
-                        bot = @screen_bot + 1
+                        try
+                            top = @screen_top
+                            bot = @screen_bot + 1
 
-                        left = @screen_left
-                        right = @screen_right + 1
+                            left = @screen_left
+                            right = @screen_right + 1
 
-                        count = parseInt(util.inspect(v[0]))
-                        #console.log 'scrolling:',count
-                        #tlnumber = tlnumber + count
-                        if count > 0
-                            src_top = top+count
-                            src_bot = bot
-                            dst_top = top
-                            dst_bot = bot - count
-                            clr_top = dst_bot
-                            clr_bot = src_bot
+                            count = parseInt(util.inspect(v[0]))
+                            #console.log 'scrolling:',count
+                            #tlnumber = tlnumber + count
+                            if count > 0
+                                src_top = top+count
+                                src_bot = bot
+                                dst_top = top
+                                dst_bot = bot - count
+                                clr_top = dst_bot
+                                clr_bot = src_bot
 
-                        else
-                            src_top = top
-                            src_bot = bot + count
-                            dst_top = top - count
-                            dst_bot = bot
-                            clr_top = src_top
-                            clr_bot = dst_top
+                            else
+                                src_top = top
+                                src_bot = bot + count
+                                dst_top = top - count
+                                dst_bot = bot
+                                clr_top = src_top
+                                clr_bot = dst_top
 
-                        #for posi in range(clr_top,clr_bot)
-                            #for posj in range(left,right)
-                                #screen[posi][posj] = ' '
+                            #for posi in range(clr_top,clr_bot)
+                                #for posj in range(left,right)
+                                    #screen[posi][posj] = ' '
 
-                        top = @screen_top
-                        bottom = @screen_bot
-                        left = @screen_left
-                        right = @screen_right
-                        #console.log 'left:',left
-                        if count > 0
-                            start = top
-                            stop = bottom - count + 1
-                            step = 1
-                        else
-                            start = bottom
-                            stop = top - count + 1
-                            step = -1
+                            top = @screen_top
+                            bottom = @screen_bot
+                            left = @screen_left
+                            right = @screen_right
+                            #console.log 'left:',left
+                            if count > 0
+                                start = top
+                                stop = bottom - count + 1
+                                step = 1
+                            else
+                                start = bottom
+                                stop = top - count + 1
+                                step = -1
 
-                        for row in range(start,stop,step)
+                            for row in range(start,stop,step)
 
-                            dirty[row] = true
-                            target_row = screen[row]
-                            source_row = screen[row + count]
-                            for col in range(left,right+1)
-                                target_row[col] = source_row[col]
+                                dirty[row] = true
+                                target_row = screen[row]
+                                source_row = screen[row + count]
+                                for col in range(left,right+1)
+                                    target_row[col] = source_row[col]
 
-                        for row in  range(stop, stop+count,step)
-                            for col in  range(left,right+1)
-                                screen[row][col] = ' '
+                            for row in  range(stop, stop+count,step)
+                                for col in  range(left,right+1)
+                                    screen[row][col] = ' '
 
-                        scrolled = true
-                        if count > 0
-                            @vimState.scrolled_down = true
-                        else
-                            @vimState.scrolled_down = false
+                            scrolled = true
+                            if count > 0
+                                @vimState.scrolled_down = true
+                            else
+                                @vimState.scrolled_down = false
+                        catch
+                            console.log 'problem scrolling'
 
                 else if x[0] is "put"
                     cnt = 0
                     #console.log 'put:',x[1..]
                     for v in x[1..]
-                        v[0] = buf2str(v[0])
-                        ly = @vimState.location[0]
-                        lx = @vimState.location[1]
-                        if 0<=ly and ly < @rows-1
-                            qq = v[0]
-                            screen[ly][lx] = qq[0]
-                            @vimState.location[1] = lx + 1
-                            dirty[ly] = true
-                        else if ly == @rows - 1
-                            qq = v[0]
-                            @vimState.status_bar[lx] = qq[0]
-                            @vimState.location[1] = lx + 1
-                        else if ly > @rows - 1
-                            console.log 'over the max'
+                        try
+                            v[0] = buf2str(v[0])
+                            ly = @vimState.location[0]
+                            lx = @vimState.location[1]
+                            if 0<=ly and ly < @rows-1
+                                qq = v[0]
+                                screen[ly][lx] = qq[0]
+                                @vimState.location[1] = lx + 1
+                                dirty[ly] = true
+                            else if ly == @rows - 1
+                                qq = v[0]
+                                @vimState.status_bar[lx] = qq[0]
+                                @vimState.location[1] = lx + 1
+                            else if ly > @rows - 1
+                                console.log 'over the max'
+                        catch
+                            console.log 'problem putting'
+
 
                 else if x[0] is "clear"
                     #console.log 'clear'
@@ -365,7 +377,7 @@ class EventHandler
                     else if ly > @rows - 1
                         console.log 'over the max'
 
-            @vimState.redraw_screen(@rows, dirty)
+        @vimState.redraw_screen(@rows, dirty)
 
         if scrolled
             neovim_send_message([0,1,'vim_command',['redraw!']])
@@ -376,7 +388,7 @@ class EventHandler
                 new Point(current_editor.buffer.getLastRow(),0),
                 new Point(current_editor.buffer.getLastRow(),96)),'',
                 options)
-        internal_change = false 
+        internal_change = false
 
 module.exports =
 class VimState
@@ -535,21 +547,24 @@ class VimState
         #console.log 'NOT SUBSCRIBING, problem'
         #
 
-  postprocess: (rows) =>
+  postprocess: (rows, dirty) =>
     screen_f = []
     for posi in [0..rows-1]
         line = undefined
-        if screen[posi]
+        if screen[posi] and dirty[posi]
             line = []
             for posj in [0..screen[posi].length-2]
                 if screen[posi][posj]=='$' and screen[posi][posj+1]==' ' and 
                    screen[posi][posj+2]==' '
                     break
                 line.push screen[posi][posj]
+        else
+            if screen[posi]
+                line = screen[posi]
         screen_f.push line
 
   redraw_screen:(rows, dirty) =>
-    @postprocess(rows)
+    @postprocess(rows, dirty)
     tlnumberarr = []
     for posi in [0..rows-1]
         try
@@ -569,31 +584,26 @@ class VimState
         @tlnumber = tlnumberarr[0]
 
     if dirty
-        onedirty = false
-        for posi in [0..rows-2]
-            if dirty[posi]
-                onedirty = true
-                break
-        
-        if onedirty
-            for posi in [0..rows-2]
-                qq = screen_f[posi]
-                pos = parseInt(qq[0..3].join(''))
-                if not isNaN(pos)
-                    if (pos-1 == @tlnumber + posi) and dirty[posi]
-                        if not DEBUG
-                            qq = qq[4..].join('')
-                        else
-                            qq = qq[..].join('')   #this is for debugging
 
-                        linerange = new Range(new Point(@tlnumber+posi,0),
-                                                new Point(@tlnumber + posi, 96))
-                        options =  { normalizeLineEndings:false, undo: 'skip' }
-                        current_editor.buffer.setTextInRange(linerange, qq, options)
-                        dirty[posi] = false
+        options =  { normalizeLineEndings:false, undo: 'skip' }
+
+        if DEBUG
+            initial = 0
+        else
+            initial = 4
+
+        for posi in [0..rows-2]
+            if not (tlnumberarr[posi] is -1)
+                if (tlnumberarr[posi] + posi == @tlnumber + posi) and dirty[posi]
+                    qq = screen_f[posi]
+                    qq = qq[initial..].join('')
+                    linerange = new Range(new Point(@tlnumber+posi,0),
+                                            new Point(@tlnumber + posi, 96))
+                    current_editor.buffer.setTextInRange(linerange, qq, options)
+                    dirty[posi] = false
 
     sbt = @status_bar.join('')
-    @updateStatusBarWithText(sbt)
+    @updateStatusBarWithText(sbt, (rows - 1 == @location[0]), @location[1])
 
     if @cursor_visible and @location[0] <= rows - 2
         if not DEBUG
@@ -699,7 +709,10 @@ class VimState
             else
                 editorview.classList.remove(mode)
 
-  updateStatusBarWithText:(text) ->
+  updateStatusBarWithText:(text, addcursor, loc) ->
+    if addcursor
+      text = text[0..loc-1].concat('&#9632').concat(text[loc+1..])
+    text = text.split(' ').join('&nbsp;')
     q = '<samp>'
     qend = '</samp>'
     element.innerHTML = q.concat(text).concat(qend)
