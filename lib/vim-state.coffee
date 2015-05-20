@@ -16,7 +16,6 @@ if os.platform() is 'win32'
 else
     CONNECT_TO = '/tmp/neovim/neovim581'
 
-MESSAGE_COUNTER = 1
 DEBUG = false
 
 subscriptions = {}
@@ -56,14 +55,14 @@ normalize_filename = (filename) ->
     return filename
 
 
-socket2 = new net.Socket()
-socket2.connect(CONNECT_TO)
-socket2.on('error', (error) =>
+socket = new net.Socket()
+socket.connect(CONNECT_TO)
+socket.on('error', (error) =>
   console.log 'error communicating (send message): ' + error
-  socket2.destroy()
+  socket.destroy()
 )
 session = new Session()
-session.attach(socket2, socket2)
+session.attach(socket, socket)
  
 buf2str = (buffer) ->
   if not buffer
@@ -485,14 +484,6 @@ class VimState
             #subscriptions['redraw'] = false
 
             console.log 'unsubscribing'
-
-            #message = [0,1,'ui_detach',[]]
-            #message[1] = MESSAGE_COUNTER
-            #MESSAGE_COUNTER = (MESSAGE_COUNTER + 1) % 256
-            #console.log 'MESSAGE_COUNTER',MESSAGE_COUNTER
-            #msg2 = encode_pub(message)
-
-
 
   activePaneChanged: =>
     if active_change
