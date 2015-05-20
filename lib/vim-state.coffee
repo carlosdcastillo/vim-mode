@@ -668,16 +668,6 @@ class VimState
     @changeModeClass('invisible-mode')
     @updateStatusBar()
 
-
-  # Private: Get the input operator that needs to be told about about the
-  # typed undo transaction in a recently completed operation, if there
-  # is one.
-  inputOperator: (item) ->
-    return item unless item?
-    return item if item.inputOperator?()
-    return item.composedObject if item.composedObject?.inputOperator?()
-
-
   # Private: Used to enable visual mode.
   #
   # type - One of 'characterwise', 'linewise' or 'blockwise'
