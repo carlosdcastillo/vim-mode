@@ -76,8 +76,6 @@ created)
 buffer.
 * Find a solution to syncing when the file has a line with more than 
 96 characters.
-* Handle Atom-centric text editing actions, i.e., situations like the user
-searching and replacing in Atom by hitting Cmd-F
 * Handle files of more than 9999 lines.
 * Make one of the following UI connections/integrations: visual selection,
 highlight search, auto completion, etc.
