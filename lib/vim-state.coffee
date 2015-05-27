@@ -132,11 +132,9 @@ neovim_send_message = (message,f = undefined) ->
 
 
 neovim_set_text = (text) ->
-    console.log 'changed mmg'
     lines = text.split('\n')
     lines = lines[0..lines.length-2]
     neovim_send_message([0,1,'vim_get_current_buffer',[]],(buf) =>
-        console.log 'current bufferh:',buf
         l = []
         for item in lines
             l.push(item)
