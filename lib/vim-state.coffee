@@ -16,7 +16,6 @@ if os.platform() is 'win32'
 else
     CONNECT_TO = '/tmp/neovim/neovim581'
 
-MESSAGE_COUNTER = 1
 DEBUG = false
 
 subscriptions = {}
@@ -62,8 +61,52 @@ socket2.on('error', (error) =>
   console.log 'error communicating (send message): ' + error
   socket2.destroy()
 )
-session = new Session()
-session.attach(socket2, socket2)
+tmpsession = new Session()
+tmpsession.attach(socket2, socket2)
+
+class RBuffer
+  constructor:(data) ->
+    @data = data
+    
+class RWindow
+  constructor:(data) ->
+    @data = data
+        
+class RTabpage
+  constructor:(data) ->
+    @data = data
+    
+session = undefined
+types = []
+tmpsession.request('vim_get_api_info', [], (err, res) ->
+    metadata = res[1]
+    constructors = [
+        RBuffer
+        RWindow
+        RTabpage
+    ]
+    i = 0
+    l = constructors.length
+    while i < l
+        ((constructor) ->
+            types.push
+                constructor: constructor
+                code: metadata.types[constructor.name[1..]].id
+                decode: (data) ->
+                    new constructor(data)
+                encode: (obj) ->
+                    obj.data
+            return
+        ) constructors[i]
+        i++
+
+
+    tmpsession.detach()
+    socket = new net.Socket()
+    socket.connect(CONNECT_TO)
+    session = new Session(types)
+    session.attach(socket, socket)
+)
  
 buf2str = (buffer) ->
   if not buffer
@@ -81,12 +124,29 @@ neovim_send_message = (message,f = undefined) ->
                                                                   if typeof(res) is 'number'
                                                                       f(util.inspect(res))
                                                                   else
-                                                                      f(buf2str(res))
+                                                                      f(res)
 
                        )
     catch err
         console.log 'error in neovim_send_message '+err
 
+
+neovim_set_text = (text) ->
+    console.log 'changed mmg'
+    lines = text.split('\n')
+    lines = lines[0..lines.length-2]
+    neovim_send_message([0,1,'vim_get_current_buffer',[]],(buf) =>
+        console.log 'current bufferh:',buf
+        l = []
+        for item in lines
+            l.push(item)
+        neovim_send_message([0,1,'buffer_set_line_slice',[buf,0,l.length,true,false,l]])
+    )
+
+register_change_handler = () ->
+    current_editor.buffer.on 'changed', =>
+        if not internal_change
+            neovim_set_text(current_editor.getText())
 
 ns_redraw_win_end = () ->
 
@@ -103,6 +163,7 @@ ns_redraw_win_end = () ->
         return
 
     neovim_send_message([0,1,'vim_eval',['&modified']], (mod) =>
+        mod = buf2str(mod)
 
         q = '.tab-bar .tab [data-path*="'
         q = q.concat(uri)
@@ -129,6 +190,7 @@ ns_redraw_win_end = () ->
 
     if true
         neovim_send_message([0,1,'vim_eval',["expand('%:p')"]], (filename) =>
+            filename = buf2str(filename)
             #console.log 'filename reported by vim:',filename
             #console.log 'current editor uri:',uri
 
@@ -142,6 +204,7 @@ ns_redraw_win_end = () ->
                 
             else
                 neovim_send_message([0,1,'vim_eval',["line('$')"]], (nLines) =>
+                    nLines = buf2str(nLines)
                     if current_editor
                         if current_editor.buffer.getLastRow() < parseInt(nLines)
                             nl = parseInt(nLines) - current_editor.buffer.getLastRow()
@@ -351,7 +414,6 @@ class EventHandler
                         catch
                             console.log 'problem putting'
 
-
                 else if x[0] is "clear"
                     #console.log 'clear'
                     for posj in [0..@cols-1]
@@ -486,14 +548,6 @@ class VimState
 
             console.log 'unsubscribing'
 
-            #message = [0,1,'ui_detach',[]]
-            #message[1] = MESSAGE_COUNTER
-            #MESSAGE_COUNTER = (MESSAGE_COUNTER + 1) % 256
-            #console.log 'MESSAGE_COUNTER',MESSAGE_COUNTER
-            #msg2 = encode_pub(message)
-
-
-
   activePaneChanged: =>
     if active_change
         try
@@ -538,6 +592,7 @@ class VimState
     neovim_send_message([0,1,'vim_command',['set autoread']])
     neovim_send_message([0,1,'vim_command',['set backspace=indent,eol,start']])
     neovim_send_message([0,1,'vim_command',['redraw!']])
+    register_change_handler()
 
 
     if not subscriptions['redraw']
