@@ -55,11 +55,11 @@ normalize_filename = (filename) ->
     return filename
 
 
-socket2 = new net.Socket()
-socket2.connect(CONNECT_TO)
-socket2.on('error', (error) =>
+socket = new net.Socket()
+socket.connect(CONNECT_TO)
+socket.on('error', (error) =>
   console.log 'error communicating (send message): ' + error
-  socket2.destroy()
+  socket.destroy()
 )
 tmpsession = new Session()
 tmpsession.attach(socket2, socket2)
@@ -720,16 +720,6 @@ class VimState
     #@editor.beginTransaction() unless transactionStarted
     @changeModeClass('invisible-mode')
     @updateStatusBar()
-
-
-  # Private: Get the input operator that needs to be told about about the
-  # typed undo transaction in a recently completed operation, if there
-  # is one.
-  inputOperator: (item) ->
-    return item unless item?
-    return item if item.inputOperator?()
-    return item.composedObject if item.composedObject?.inputOperator?()
-
 
   # Private: Used to enable visual mode.
   #
