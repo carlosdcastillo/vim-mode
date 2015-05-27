@@ -55,11 +55,11 @@ normalize_filename = (filename) ->
     return filename
 
 
-socket = new net.Socket()
-socket.connect(CONNECT_TO)
-socket.on('error', (error) =>
+socket2 = new net.Socket()
+socket2.connect(CONNECT_TO)
+socket2.on('error', (error) =>
   console.log 'error communicating (send message): ' + error
-  socket.destroy()
+  socket2.destroy()
 )
 tmpsession = new Session()
 tmpsession.attach(socket2, socket2)
