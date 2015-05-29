@@ -201,8 +201,10 @@ ns_redraw_win_end = () ->
                 atom.workspace.open(filename)
                 
             else
+
                 neovim_send_message([0,1,'vim_eval',["line('$')"]], (nLines) =>
-                    nLines = buf2str(nLines)
+                    internal_change = true
+                    console.log('lines:',nLines)
                     if current_editor
                         if current_editor.buffer.getLastRow() < parseInt(nLines)
                             nl = parseInt(nLines) - current_editor.buffer.getLastRow()
@@ -226,6 +228,7 @@ ns_redraw_win_end = () ->
                                     new Point(pos,item.length)),'',options)
                             pos = pos + 1
 
+                    internal_change = false
                 )
             )
 
@@ -572,6 +575,7 @@ class VimState
   afterOpen: =>
     #console.log 'in after open'
     neovim_send_message([0,1,'vim_command',['set scrolloff=2']])
+    neovim_send_message([0,1,'vim_command',['set nocompatible']])
     neovim_send_message([0,1,'vim_command',['set noswapfile']])
     neovim_send_message([0,1,'vim_command',['set nowrap']])
     neovim_send_message([0,1,'vim_command',['set nu']])
@@ -589,7 +593,6 @@ class VimState
     neovim_send_message([0,1,'vim_command',['set incsearch']])
     neovim_send_message([0,1,'vim_command',['set autoread']])
     neovim_send_message([0,1,'vim_command',['set backspace=indent,eol,start']])
-    neovim_send_message([0,1,'vim_command',['redraw!']])
     register_change_handler()
 
 
