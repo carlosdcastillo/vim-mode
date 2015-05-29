@@ -28,8 +28,10 @@ editor_views = {}
 active_change = true
 
 scrolltopchange_subscription = undefined
+bufferchange_subscription = undefined
 scrolltop = undefined
 internal_change = false
+internal_change_timout_var = undefined
 
 element = document.createElement("item-view")
 setInterval ( => ns_redraw_win_end()), 150
@@ -142,9 +144,45 @@ neovim_set_text = (text) ->
     )
 
 register_change_handler = () ->
-    current_editor.buffer.on 'changed', =>
+    bufferchange_subscription = current_editor.onDidChange ( (change)  =>
         if not internal_change
-            neovim_set_text(current_editor.getText())
+            sync_lines()
+            neovim_set_text(current_editor.getText()))
+
+sync_lines = () ->
+
+    neovim_send_message([0,1,'vim_eval',["line('$')"]], (nLines) =>
+        if internal_change_timout_var
+            clearTimeout(internal_change_timout_var)
+        internal_change = true
+
+        console.log('lines:',nLines)
+        if current_editor
+            if current_editor.buffer.getLastRow() < parseInt(nLines)
+                nl = parseInt(nLines) - current_editor.buffer.getLastRow()
+                diff = ''
+                for i in [0..nl-1]
+                    diff = diff + '\n'
+                append_options = {normalizeLineEndings: false}
+                current_editor.buffer.append(diff, append_options)
+                neovim_send_message([0,1,'vim_command',['redraw!']])
+            else if current_editor.buffer.getLastRow() > parseInt(nLines)
+                for i in [parseInt(nLines)..current_editor.buffer.getLastRow()]
+                    current_editor.buffer.deleteRow(i)
+
+
+            lines = current_editor.buffer.getLines()
+            pos = 0
+            for item in lines
+                if item.length > 96
+                    options =  { normalizeLineEndings:false, undo: 'skip' }
+                    current_editor.buffer.setTextInRange(new Range(
+                        new Point(pos,96),
+                        new Point(pos,item.length)),'',options)
+                pos = pos + 1
+
+        internal_change_timout_var = setTimeout(( => internal_change = false), 10)
+    )
 
 ns_redraw_win_end = () ->
 
@@ -202,34 +240,7 @@ ns_redraw_win_end = () ->
                 
             else
 
-                neovim_send_message([0,1,'vim_eval',["line('$')"]], (nLines) =>
-                    internal_change = true
-                    console.log('lines:',nLines)
-                    if current_editor
-                        if current_editor.buffer.getLastRow() < parseInt(nLines)
-                            nl = parseInt(nLines) - current_editor.buffer.getLastRow()
-                            diff = ''
-                            for i in [0..nl-1]
-                                diff = diff + '\n'
-                            current_editor.buffer.append(diff, true)
-                            neovim_send_message([0,1,'vim_command',['redraw!']])
-                        else if current_editor.buffer.getLastRow() > parseInt(nLines)
-                            for i in [parseInt(nLines)..current_editor.buffer.getLastRow()]
-                                current_editor.buffer.deleteRow(i)
-
-
-                        lines = current_editor.buffer.getLines()
-                        pos = 0
-                        for item in lines
-                            if item.length > 96
-                                options =  { normalizeLineEndings:false, undo: 'skip' }
-                                current_editor.buffer.setTextInRange(new Range(
-                                    new Point(pos,96),
-                                    new Point(pos,item.length)),'',options)
-                            pos = pos + 1
-
-                    internal_change = false
-                )
+                sync_lines()
             )
 
     active_change = false
@@ -280,6 +291,8 @@ class EventHandler
     handleEvent: (event, q) =>
         if q.length is 0
             return
+        if internal_change_timout_var
+            clearTimeout(internal_change_timout_var)
         internal_change = true
         dirty = (false for i in [0..@rows-2])
 
@@ -447,11 +460,12 @@ class EventHandler
             scrolled = false
 
         options =  { normalizeLineEndings:false, undo: 'skip' }
-        current_editor.buffer.setTextInRange(new Range(
-                new Point(current_editor.buffer.getLastRow(),0),
-                new Point(current_editor.buffer.getLastRow(),96)),'',
-                options)
-        internal_change = false
+        if current_editor
+            current_editor.buffer.setTextInRange(new Range(
+                    new Point(current_editor.buffer.getLastRow(),0),
+                    new Point(current_editor.buffer.getLastRow(),96)),'',
+                    options)
+        internal_change_timout_var = setTimeout(( => internal_change = false), 10)
 
 module.exports =
 class VimState
@@ -484,13 +498,6 @@ class VimState
         @statusbar = document.querySelector('status-bar').addLeftTile(item:element,
                                                                         priority:10 )
 
-    #if not subscriptions['redraw']
-    #@neovim_subscribe()
-
-    #atom.project.eachBuffer (buffer) =>
-      #@registerChangeHandler(buffer)
-
-    #atom.workspaceView.on 'pane-container:active-pane-item-changed', @activePaneChanged
     atom.workspace.onDidChangeActivePaneItem @activePaneChanged
     atom.commands.add 'atom-text-editor', 'core:save', (e) -> 
         e.preventDefault()
@@ -551,17 +558,23 @@ class VimState
 
   activePaneChanged: =>
     if active_change
+        internal_change = true
         try
 
             filename = atom.workspace.getActiveTextEditor().getURI()
             neovim_send_message([0,1,'vim_command',['e '+ filename]],(x) =>
                 if scrolltopchange_subscription
                     scrolltopchange_subscription.dispose()
+                if bufferchange_subscription
+                    bufferchange_subscription.dispose()
 
                 current_editor = atom.workspace.getActiveTextEditor()
                 if current_editor
                     scrolltopchange_subscription = 
                         current_editor.onDidChangeScrollTop scrollTopChanged 
+
+                    register_change_handler()
+
                 scrolltop = undefined
 
                 @tlnumber = 0
@@ -571,6 +584,8 @@ class VimState
 
             console.log err
             console.log 'problem changing panes'
+
+        internal_change = false
 
   afterOpen: =>
     #console.log 'in after open'
@@ -593,7 +608,6 @@ class VimState
     neovim_send_message([0,1,'vim_command',['set incsearch']])
     neovim_send_message([0,1,'vim_command',['set autoread']])
     neovim_send_message([0,1,'vim_command',['set backspace=indent,eol,start']])
-    register_change_handler()
 
 
     if not subscriptions['redraw']
@@ -620,56 +634,57 @@ class VimState
         screen_f.push line
 
   redraw_screen:(rows, dirty) =>
-    @postprocess(rows, dirty)
-    tlnumberarr = []
-    for posi in [0..rows-1]
-        try
-            pos = parseInt(screen_f[posi][0..3].join(''))
-            if not isNaN(pos)
-                tlnumberarr.push (  (pos - 1) - posi  )
-            else
+    if current_editor
+        @postprocess(rows, dirty)
+        tlnumberarr = []
+        for posi in [0..rows-1]
+            try
+                pos = parseInt(screen_f[posi][0..3].join(''))
+                if not isNaN(pos)
+                    tlnumberarr.push (  (pos - 1) - posi  )
+                else
+                    tlnumberarr.push -1
+            catch err
                 tlnumberarr.push -1
-        catch err
-            tlnumberarr.push -1
 
-    if scrolled and @scrolled_down
-        @tlnumber = tlnumberarr[tlnumberarr.length-2]
-    else if scrolled and not @scrolled_down
-        @tlnumber = tlnumberarr[0]
-    else
-        @tlnumber = tlnumberarr[0]
-
-    if dirty
-
-        options =  { normalizeLineEndings:false, undo: 'skip' }
-
-        if DEBUG
-            initial = 0
+        if scrolled and @scrolled_down
+            @tlnumber = tlnumberarr[tlnumberarr.length-2]
+        else if scrolled and not @scrolled_down
+            @tlnumber = tlnumberarr[0]
         else
-            initial = 4
+            @tlnumber = tlnumberarr[0]
 
-        for posi in [0..rows-2]
-            if not (tlnumberarr[posi] is -1)
-                if (tlnumberarr[posi] + posi == @tlnumber + posi) and dirty[posi]
-                    qq = screen_f[posi]
-                    qq = qq[initial..].join('')
-                    linerange = new Range(new Point(@tlnumber+posi,0),
-                                            new Point(@tlnumber + posi, 96))
-                    current_editor.buffer.setTextInRange(linerange, qq, options)
-                    dirty[posi] = false
+        if dirty
 
-    sbt = @status_bar.join('')
-    @updateStatusBarWithText(sbt, (rows - 1 == @location[0]), @location[1])
+            options =  { normalizeLineEndings:false, undo: 'skip' }
 
-    if @cursor_visible and @location[0] <= rows - 2
-        if not DEBUG
-            current_editor.setCursorBufferPosition(new Point(@tlnumber + @location[0], 
-                                                        @location[1]-4),{autoscroll:true})
-        else
-            current_editor.setCursorBufferPosition(new Point(@tlnumber + @location[0], 
-                                                        @location[1]),{autoscroll:true})
+            if DEBUG
+                initial = 0
+            else
+                initial = 4
 
-    current_editor.setScrollTop(lineSpacing()*@tlnumber)
+            for posi in [0..rows-2]
+                if not (tlnumberarr[posi] is -1)
+                    if (tlnumberarr[posi] + posi == @tlnumber + posi) and dirty[posi]
+                        qq = screen_f[posi]
+                        qq = qq[initial..].join('')
+                        linerange = new Range(new Point(@tlnumber+posi,0),
+                                                new Point(@tlnumber + posi, 96))
+                        current_editor.buffer.setTextInRange(linerange, qq, options)
+                        dirty[posi] = false
+
+        sbt = @status_bar.join('')
+        @updateStatusBarWithText(sbt, (rows - 1 == @location[0]), @location[1])
+
+        if @cursor_visible and @location[0] <= rows - 2
+            if not DEBUG
+                current_editor.setCursorBufferPosition(new Point(@tlnumber + @location[0], 
+                                                            @location[1]-4),{autoscroll:true})
+            else
+                current_editor.setCursorBufferPosition(new Point(@tlnumber + @location[0], 
+                                                            @location[1]),{autoscroll:true})
+
+        current_editor.setScrollTop(lineSpacing()*@tlnumber)
 
   neovim_subscribe: =>
     console.log 'neovim_subscribe'
@@ -746,14 +761,15 @@ class VimState
   changeModeClass: (targetMode) ->
     #console.log 'query time:',current_editor.getURI()
     #console.log 'editor_views:',editor_views
-    editorview = editor_views[current_editor.getURI()]
-    if editorview
-        for mode in ['command-mode', 'insert-mode', 'visual-mode', 
-                    'operator-pending-mode', 'invisible-mode']
-            if mode is targetMode
-                editorview.classList.add(mode)
-            else
-                editorview.classList.remove(mode)
+    if current_editor
+        editorview = editor_views[current_editor.getURI()]
+        if editorview
+            for mode in ['command-mode', 'insert-mode', 'visual-mode', 
+                        'operator-pending-mode', 'invisible-mode']
+                if mode is targetMode
+                    editorview.classList.add(mode)
+                else
+                    editorview.classList.remove(mode)
 
   updateStatusBarWithText:(text, addcursor, loc) ->
     if addcursor

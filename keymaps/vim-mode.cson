@@ -12,6 +12,8 @@
   'down': 'core:cancel'
   'left': 'core:cancel'
   'right': 'core:cancel'
+  'pagedown': 'core:cancel'
+  'pageup': 'core:cancel'
 
 '.platform-win32 .editor':
   'ctrl-r': 'unset!'
