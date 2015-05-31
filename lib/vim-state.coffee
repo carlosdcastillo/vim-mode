@@ -45,7 +45,7 @@ range = (start, stop, step) ->
     return []  if (step > 0 and start >= stop) or (step < 0 and start <= stop)
     result = []
     i = start
-  
+
     while (if step > 0 then i < stop else i > stop)
         result.push i
         i += step
@@ -558,6 +558,9 @@ class VimState
 
   activePaneChanged: =>
     if active_change
+
+        if internal_change_timout_var
+            clearTimeout(internal_change_timout_var)
         internal_change = true
         try
 
@@ -585,7 +588,7 @@ class VimState
             console.log err
             console.log 'problem changing panes'
 
-        internal_change = false
+        internal_change_timout_var = setTimeout(( => internal_change = false), 10)
 
   afterOpen: =>
     #console.log 'in after open'
@@ -657,6 +660,7 @@ class VimState
         if dirty
 
             options =  { normalizeLineEndings:false, undo: 'skip' }
+            #options =  { normalizeLineEndings:false }
 
             if DEBUG
                 initial = 0
@@ -679,10 +683,10 @@ class VimState
         if @cursor_visible and @location[0] <= rows - 2
             if not DEBUG
                 current_editor.setCursorBufferPosition(new Point(@tlnumber + @location[0], 
-                                                            @location[1]-4),{autoscroll:true})
+                                                        @location[1]-4),{autoscroll:true})
             else
                 current_editor.setCursorBufferPosition(new Point(@tlnumber + @location[0], 
-                                                            @location[1]),{autoscroll:true})
+                                                        @location[1]),{autoscroll:true})
 
         current_editor.setScrollTop(lineSpacing()*@tlnumber)
 
