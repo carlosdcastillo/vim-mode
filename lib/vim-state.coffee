@@ -181,7 +181,7 @@ sync_lines = () ->
                         new Point(pos,item.length)),'',options)
                 pos = pos + 1
 
-        internal_change_timout_var = setTimeout(( => internal_change = false), 10)
+        internal_change_timout_var = setTimeout(( => internal_change = false), 50)
     )
 
 ns_redraw_win_end = () ->
@@ -465,7 +465,7 @@ class EventHandler
                     new Point(current_editor.buffer.getLastRow(),0),
                     new Point(current_editor.buffer.getLastRow(),96)),'',
                     options)
-        internal_change_timout_var = setTimeout(( => internal_change = false), 10)
+        internal_change_timout_var = setTimeout(( => internal_change = false), 50)
 
 module.exports =
 class VimState
@@ -588,7 +588,7 @@ class VimState
             console.log err
             console.log 'problem changing panes'
 
-        internal_change_timout_var = setTimeout(( => internal_change = false), 10)
+        internal_change_timout_var = setTimeout(( => internal_change = false), 50)
 
   afterOpen: =>
     #console.log 'in after open'
