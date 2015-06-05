@@ -8,7 +8,7 @@ I've update everything to work with the version in master of
 [Neovim](http://github.com/neovim/neovim)
 
 On the [Atom](https://atom.io/) side I've tested it with version 0.175 and
-0.184 and seems to work fine.
+0.184 and seems to work fine. I am currently using version 0.201.
 
 It should be usable enough that if you are adventurous you will be able to get
 day-to-day work done. There are, however, plenty of features missing, so you
@@ -31,12 +31,12 @@ On OS X and Linux, create a folder for the named pipe:
 
 Run Neovim, pointing it to the named pipe, on OS X and Linux:
 
-    $ NVIM_LISTEN_ADDRESS=/tmp/neovim/neovim581 nvim 
+    $ NVIM_LISTEN_ADDRESS=/tmp/neovim/neovim nvim 
 
 The equivalent in Windows (define an environment variable and point it to the
 named pipe) is:
 
-    set NVIM_LISTEN_ADDRESS=\\.\pipe\neovim581
+    set NVIM_LISTEN_ADDRESS=\\.\pipe\neovim
 
 and then
 
