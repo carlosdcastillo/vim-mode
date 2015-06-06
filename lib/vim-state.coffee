@@ -12,9 +12,9 @@ Session = require 'msgpack5rpc'
 HighlightedAreaView = require './highlighted-area-view'
 
 if os.platform() is 'win32'
-    CONNECT_TO = '\\\\.\\pipe\\neovim581'
+    CONNECT_TO = '\\\\.\\pipe\\neovim'
 else
-    CONNECT_TO = '/tmp/neovim/neovim581'
+    CONNECT_TO = '/tmp/neovim/neovim'
 
 DEBUG = false
 
@@ -176,30 +176,28 @@ neovim_set_text = (text, start, end, delta) ->
     )
 
 
-finalize_update = () ->
-    updating = false
-    lupdates = []
-    neovim_send_message(['vim_command',['redraw!']])
-
 real_update = () ->
     if not updating
         updating = true
 
-        console.log 'lupdates',lupdates
-        mn = lupdates[0].start
-        mx = lupdates[0].end
+        curr_updates = lupdates.slice(0)
+        lupdates = []
+
+        mn = curr_updates[0].start
+        mx = curr_updates[0].end
         tot = 0
 
-        for item in lupdates
+        for item in curr_updates
+            console.log 'item:',item
             if item.start < mn
                 mn = item.start
             if item.end > mx
                 mx = item.end
             tot = tot + item.delta
 
-        item = lupdates[lupdates.length - 1]
+        item = curr_updates[curr_updates.length - 1]
         neovim_set_text(item.text, mn, mx, tot)
-        setTimeout(( -> finalize_update()), 50)
+        updating = false
         
 register_change_handler = () ->
     bufferchange_subscription = current_editor.onDidChange ( (change)  ->
@@ -212,7 +210,7 @@ register_change_handler = () ->
                 end: change.end, delta: change.bufferDelta})
 
             updating_change_timeout_var =
-                setTimeout(( -> real_update()), 100)
+                setTimeout(( -> real_update()), 10)
 
     )
 
@@ -290,7 +288,6 @@ ns_redraw_win_end = () ->
                     tabelement.isModified = false
 
     )
-
 
     focused = editor_views[uri].classList.contains('is-focused')
 
@@ -641,6 +638,7 @@ class VimState
             internal_change = true
             try
     
+    
                 filename = atom.workspace.getActiveTextEditor().getURI()
                 neovim_send_message(['vim_command',['e '+ filename]],(x) =>
                     if scrolltopchange_subscription
@@ -690,7 +688,6 @@ class VimState
         neovim_send_message(['vim_command',['set autoread']])
         neovim_send_message(['vim_command',
             ['set backspace=indent,eol,start']])
-    
     
         if not subscriptions['redraw']
             #console.log 'subscribing, after open'
@@ -790,6 +787,7 @@ class VimState
   
   
     # last deleted buffer.
+    #
     #
     # Returns nothing.
     registerChangeHandler: (buffer) ->
