@@ -15,5 +15,5 @@
   'pagedown': 'core:cancel'
   'pageup': 'core:cancel'
 
-'.platform-win32 .editor':
+'.platform-win32 .atom-text-editor':
   'ctrl-r': 'unset!'

@@ -4,12 +4,9 @@ $ = require  'jquery'
 Marker = require 'atom'
 net = require 'net'
 os = require 'os'
-MarkerView = require './marker-view'
 util = require 'util'
 
 Session = require 'msgpack5rpc'
-
-HighlightedAreaView = require './highlighted-area-view'
 
 if os.platform() is 'win32'
     CONNECT_TO = '\\\\.\\pipe\\neovim'
@@ -569,13 +566,15 @@ class VimState
             current_editor = @editor
         @changeModeClass('command-mode')
         @activateCommandMode()
-    
-        atom.packages.once 'activated', ->
+
+        atom.packages.onDidActivatePackage(  ->
             element.innerHTML = ''
             @statusbar =
                 document.querySelector('status-bar').addLeftTile(item:element,
                 priority:10 )
-    
+
+        )
+
         atom.workspace.onDidChangeActivePaneItem @activePaneChanged
         atom.commands.add 'atom-text-editor', 'core:save', (e) ->
             e.preventDefault()
