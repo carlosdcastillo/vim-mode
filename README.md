@@ -54,6 +54,10 @@ is pre-alpha.
 
 # See it in action
 
+***A video that shows the current (June/2015) status:***
+
+http://youtu.be/FTInd3H7Zec
+
 A video that shows the integration in action in March/2015:
 
 https://www.youtube.com/watch?v=7TVBcdONEJo
@@ -88,6 +92,7 @@ of things don't work yet)
 3. Send me a pull request.
 
 # Configuring Atom
+
 To make sure that hjkl get repeated like (Vim and Neovim) on Mac you will need to
 run (from the command line):
 
