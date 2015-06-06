@@ -340,6 +340,12 @@ scrollTopChanged = () ->
                 else
                     console.log 'scroll down:',diff
                     neovim_send_message(['vim_input',['<ScrollWheelDown>']])
+        else
+
+            rng = current_editor.getSelectedBufferRange()
+            if not rng.isEmpty()
+                value = rng.start.end + 1
+                neovim_send_message(['vim_input',[''+value+'G']])
 
     scrolltop = current_editor.getScrollTop()
 
