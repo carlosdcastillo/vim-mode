@@ -194,20 +194,20 @@ real_update = () ->
 
         item = curr_updates[curr_updates.length - 1]
         neovim_set_text(item.text, mn, mx, tot)
-        updating = false
+        setTimeout(( -> updating = false), 20)
         
 register_change_handler = () ->
     bufferchange_subscription = current_editor.onDidChange ( (change)  ->
 
         q = current_editor.getText()
-        if not internal_change
+        if not internal_change and not updating
             if updating_change_timeout_var
                 clearTimeout(updating_change_timeout_var)
             lupdates.push({text: q, start: change.start, \
                 end: change.end, delta: change.bufferDelta})
 
             updating_change_timeout_var =
-                setTimeout(( -> real_update()), 10)
+                setTimeout(( -> real_update()), 20)
 
     )
 
@@ -341,8 +341,10 @@ scrollTopChanged = () ->
 
             rng = current_editor.getSelectedBufferRange()
             if not rng.isEmpty()
-                value = rng.start.end + 1
+                value = rng.end.row + 1
                 neovim_send_message(['vim_input',[''+value+'G']])
+                value = rng.end.column
+                neovim_send_message(['vim_input',[''+value+'|']])
 
     scrolltop = current_editor.getScrollTop()
 
