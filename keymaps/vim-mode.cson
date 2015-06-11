@@ -4,12 +4,12 @@
   'ctrl-b': 'core:cancel'
   'ctrl-f': 'core:cancel'
   'ctrl-n': 'core:cancel'
-  'tab': 'core:cancel'
+  'tab': 'unset!'
   'end': 'core:cancel' 
   'home': 'core:cancel' 
   'delete': 'core:cancel'
-  'up': 'core:cancel'
-  'down': 'core:cancel'
+  'up': 'unset!'
+  'down': 'unset!'
   'left': 'core:cancel'
   'right': 'core:cancel'
   'pagedown': 'core:cancel'
@@ -17,3 +17,9 @@
 
 '.platform-win32 .atom-text-editor':
   'ctrl-r': 'unset!'
+
+'atom-text-editor.vim-mode:not(mini).autocomplete-active':
+  'tab': 'autocomplete-plus:confirm'
+  'up': 'core:move-up'
+  'down': 'core:move-down'
+  'esc': 'autocomplete-plus:cancel'

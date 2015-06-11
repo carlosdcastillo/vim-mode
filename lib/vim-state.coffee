@@ -161,13 +161,14 @@ neovim_set_text = (text, start, end, delta) ->
                         l.push(vim_lines[pos-delta])
 
                 neovim_send_message(['buffer_set_line_slice',
-                    [buf,0,l.length,true,false,l]])
-                if delta < 0
-                    for i in [0..(-delta - 1)]
+                    [buf,0,l.length,true,false,l]], ( -> 
+                        if delta < 0
+                            for i in [0..(-delta - 1)]
 
-                        neovim_send_message(['buffer_del_line',
-                            [buf, l.length + i]])
-
+                                neovim_send_message(['buffer_del_line',
+                                    [buf, l.length + i]])
+                    )
+                )
             )
         )
     )
@@ -194,7 +195,10 @@ real_update = () ->
 
         item = curr_updates[curr_updates.length - 1]
         neovim_set_text(item.text, mn, mx, tot)
-        setTimeout(( -> updating = false), 20)
+        setTimeout(( ->
+            updating = false
+            neovim_send_message(['vim_command',['redraw!']])
+        ), 20)
         
 register_change_handler = () ->
     bufferchange_subscription = current_editor.onDidChange ( (change)  ->
@@ -357,6 +361,9 @@ class EventHandler
         @rows = Math.floor((qbottom - qtop)/lineSpacing()+1)
         console.log 'rows:', @rows
 
+        height = Math.floor(50+(@rows-0.5) * lineSpacing())
+
+        atom.setWindowDimensions ('width': 1400, 'height': height)
         @cols = 100
         @command_mode = true
 
@@ -559,11 +566,6 @@ class VimState
         @status_bar = []
         @location = []
     
-        #
-        #@area = new HighlightedAreaView(@editorView)
-        #@area.attach()
-        #
-    
         if not current_editor
             current_editor = @editor
         @changeModeClass('command-mode')
@@ -584,7 +586,9 @@ class VimState
             vim_mode_save_file()
     
         @editorView.onkeypress = (e) =>
-            if @editorView.classList.contains('is-focused')
+            q1 = @editorView.classList.contains('is-focused')
+            q2 = @editorView.classList.contains('autocomplete-active')
+            if q1 and not q2
                 q =  String.fromCharCode(e.which)
                 neovim_send_message(['vim_input',[q]])
                 false
@@ -592,7 +596,9 @@ class VimState
                 true
     
         @editorView.onkeydown = (e) =>
-            if @editorView.classList.contains('is-focused') and not e.altKey
+            q1 = @editorView.classList.contains('is-focused')
+            q2 = @editorView.classList.contains('autocomplete-active')
+            if q1 and not q2 and not e.altKey
                 translation = @translateCode(e.which, e.shiftKey, e.ctrlKey)
                 if translation != ""
                     neovim_send_message(['vim_input',[translation]])
@@ -644,8 +650,7 @@ class VimState
                 clearTimeout(internal_change_timeout_var)
             internal_change = true
             try
-    
-    
+
                 filename = atom.workspace.getActiveTextEditor().getURI()
                 neovim_send_message(['vim_command',['e '+ filename]],(x) =>
                     if scrolltopchange_subscription
@@ -793,19 +798,7 @@ class VimState
         subscriptions['redraw'] = true
   
   
-    # last deleted buffer.
-    #
-    #
-    # Returns nothing.
-    registerChangeHandler: (buffer) ->
-  #    buffer.on 'changed', ({newRange, newText, oldRange, oldText}) =>
-  #      return unless @setRegister?
-  #      if newText == ''
-  #        @setRegister('"', text: oldText, type: Utils.copyType(oldText))
   
-    ##########################################################################
-    # Mode Switching
-    ##########################################################################
   
     # Private: Used to enable command mode.
     #
@@ -820,38 +813,15 @@ class VimState
     # Returns nothing.
     activateInsertMode: (transactionStarted = false)->
         @mode = 'insert'
-        #@editor.beginTransaction() unless transactionStarted
         @changeModeClass('insert-mode')
         @updateStatusBar()
   
     activateInvisibleMode: (transactionStarted = false)->
         @mode = 'insert'
-        #@editor.beginTransaction() unless transactionStarted
         @changeModeClass('invisible-mode')
         @updateStatusBar()
   
-    # Private: Used to enable visual mode.
-    #
-    # type - One of 'characterwise', 'linewise' or 'blockwise'
-    #
-    # Returns nothing.
-    activateVisualMode: (type) ->
-        @deactivateInsertMode()
-        @mode = 'visual'
-        @changeModeClass('visual-mode')
-        @updateStatusBar()
-  
-    # Private: Used to enable operator-pending mode.
-    activateOperatorPendingMode: ->
-        @deactivateInsertMode()
-        @mode = 'operator-pending'
-        @submodule = null
-        @changeModeClass('operator-pending-mode')
-        @updateStatusBar()
-  
     changeModeClass: (targetMode) ->
-        #console.log 'query time:',current_editor.getURI()
-        #console.log 'editor_views:',editor_views
         if current_editor
             editorview = editor_views[current_editor.getURI()]
             if editorview
@@ -872,4 +842,4 @@ class VimState
   
     updateStatusBar: ->
         element.innerHTML = @mode
-  
+

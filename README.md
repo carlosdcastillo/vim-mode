@@ -8,7 +8,10 @@ I've update everything to work with the version in master of
 [Neovim](http://github.com/neovim/neovim)
 
 On the [Atom](https://atom.io/) side I've tested it with version 0.175 and
-0.184 and seems to work fine. I am currently using version 0.201.
+0.184 and seems to work fine. I am currently using version 0.207. In versions
+0.206 and later you will need to change the name of the directory vim-mode to
+something else (I use the name nvim-mode). I you don't Atom confuses this
+plugin with the one developed by GitHub.
 
 It should be usable enough that if you are adventurous you will be able to get
 day-to-day work done. There are, however, plenty of features missing, so you
@@ -47,7 +50,7 @@ and then
 This project aims to:
 
 * Bring real vim bindings to Atom.
-* Give the abstract-ui neovim functionality a work out and find issues using
+* Give the abstract-ui Neovim functionality a work out and find issues using
 the msgpack api.
 * Eventually build an editor that I would find useful. At the current state it
 is pre-alpha.
@@ -78,9 +81,8 @@ http://www.youtube.com/watch?v=lH_zb7X6mZw
 created)
 * Make the geometry of the Atom buffer fully match the geometry of the Neovim
 buffer.
-* Find a solution to syncing when the file has a line with more than 
-96 characters.
 * Handle files of more than 9999 lines.
+* Handle (or handle better) Atom initiated cursor position changes.
 * Make one of the following UI connections/integrations: visual selection,
 highlight search, auto completion, etc.
 
@@ -88,8 +90,8 @@ highlight search, auto completion, etc.
 
 1. Find something that doesn't work (this step shouldn't be that hard, plenty
 of things don't work yet)
-2. Fix it. 
-3. Send me a pull request.
+2. Either (a) fix it and send me a pull request or (b) file a bug report so I know it
+needs to be fixed.
 
 # Configuring Atom
 
