@@ -231,23 +231,24 @@ sync_lines = () ->
                 diff = ''
                 for i in [0..nl-1]
                     diff = diff + '\n'
-                append_options = {normalizeLineEndings: false}
+                append_options = {normalizeLineEndings: true}
                 current_editor.buffer.append(diff, append_options)
                 neovim_send_message(['vim_command',['redraw!']])
             else if current_editor.buffer.getLastRow() > parseInt(nLines)
                 for i in [parseInt(nLines)..current_editor.buffer.getLastRow()]
                     current_editor.buffer.deleteRow(i)
 
+            #this should be done, but breaks everything, so I'm not doing it:
 
-            lines = current_editor.buffer.getLines()
-            pos = 0
-            for item in lines
-                if item.length > 96
-                    options =  { normalizeLineEndings:false, undo: 'skip' }
-                    current_editor.buffer.setTextInRange(new Range(
-                        new Point(pos,96),
-                        new Point(pos,item.length)),'',options)
-                pos = pos + 1
+            #lines = current_editor.buffer.getLines()
+            #pos = 0
+            #for item in lines
+            #    if item.length > 96
+            #        options =  { normalizeLineEndings: true, undo: 'skip' }
+            #        current_editor.buffer.setTextInRange(new Range(
+            #            new Point(pos,96),
+            #            new Point(pos,item.length)),'',options)
+            #    pos = pos + 1
 
         internal_change_timeout_var =
             setTimeout(( -> internal_change = false), 5)
@@ -541,7 +542,7 @@ class EventHandler
             neovim_send_message(['vim_command',['redraw!']])
             scrolled = false
 
-        options =  { normalizeLineEndings:false, undo: 'skip' }
+        options =  { normalizeLineEndings: true, undo: 'skip' }
         if current_editor
             current_editor.buffer.setTextInRange(new Range(
                 new Point(current_editor.buffer.getLastRow(),0),
@@ -747,7 +748,7 @@ class VimState
     
             if dirty
     
-                options =  { normalizeLineEndings:false, undo: 'skip' }
+                options =  { normalizeLineEndings: true, undo: 'skip' }
                 #options =  { normalizeLineEndings:false }
     
                 if DEBUG
