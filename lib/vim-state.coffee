@@ -30,7 +30,7 @@ bufferchange_subscription = undefined
 scrolltop = undefined
 internal_change = false
 updating = false
-internal_change_timeout_var = undefined
+#internal_change_timeout_var = undefined
 updating_change_timeout_var = undefined
 
 element = document.createElement("item-view")
@@ -165,7 +165,7 @@ neovim_set_text = (text, start, end, delta) ->
                                     l.push(vim_lines[pos-delta])
 
                             neovim_send_message(['buffer_set_line_slice', 
-                                                [buf,0,l.length,true]],
+                                                [buf,0,l.length,true,false,l]],
                                                 del_line(buf,l,delta,-delta))
                         )
                     )
@@ -180,11 +180,8 @@ del_line = (buf, l, delta, i) ->
             neovim_send_message(['buffer_del_line', [buf, l.length + i]], 
                                 del_line(buf, l, delta, i-1))
         else
-            neovim_send_message(['vim_command',['redraw!']],
-                ( ->
-                    updating = false
-                )
-            )
+            updating = false
+            neovim_send_message(['vim_command',['redraw!']])
     )
 
 
@@ -209,9 +206,9 @@ real_update = () ->
 
         item = curr_updates[curr_updates.length - 1]
         neovim_set_text(item.text, mn, mx, tot)
-        setTimeout(( ->
-            neovim_send_message(['vim_command',['redraw!']])
-        ), 20)
+        #setTimeout(( ->
+            #neovim_send_message(['vim_command',['redraw!']])
+        #), 20)
         
 register_change_handler = () ->
     bufferchange_subscription = current_editor.onDidChange ( (change)  ->
@@ -223,9 +220,9 @@ register_change_handler = () ->
             lupdates.push({text: q, start: change.start, \
                 end: change.end, delta: change.bufferDelta})
 
-            #updating_change_timeout_var =
-                #setTimeout(( -> real_update()), 20)
-            real_update()
+            updating_change_timeout_var =
+                setTimeout(( -> real_update()), 20)
+            #real_update()
 
     )
 
@@ -235,8 +232,8 @@ sync_lines = () ->
     neovim_send_message(['vim_eval',["line('$')"]], (nLines) ->
         if updating
             return
-        if internal_change_timeout_var
-            clearTimeout(internal_change_timeout_var)
+        #if internal_change_timeout_var
+            #clearTimeout(internal_change_timeout_var)
         internal_change = true
 
         if current_editor
@@ -264,9 +261,9 @@ sync_lines = () ->
             #            new Point(pos,item.length)),'',options)
             #    pos = pos + 1
 
-        internal_change_timeout_var =
-            setTimeout(( -> internal_change = false), 5)
-        #internal_change = false
+        #internal_change_timeout_var =
+            #setTimeout(( -> internal_change = false), 5)
+        internal_change = false
     )
 
 ns_redraw_win_end = () ->
@@ -389,8 +386,8 @@ class EventHandler
         if updating
             return
             
-        if internal_change_timeout_var
-            clearTimeout(internal_change_timeout_var)
+        #if internal_change_timeout_var
+            #clearTimeout(internal_change_timeout_var)
         internal_change = true
         dirty = (false for i in [0..@rows-2])
 
@@ -563,9 +560,9 @@ class EventHandler
                 new Point(current_editor.buffer.getLastRow(),0),
                 new Point(current_editor.buffer.getLastRow(),96)),'',
                 options)
-        internal_change_timeout_var =
-            setTimeout(( -> internal_change = false), 5)
-        #internal_change = false
+        #internal_change_timeout_var =
+            #setTimeout(( -> internal_change = false), 5)
+        internal_change = false
 
 module.exports =
 class VimState
@@ -663,8 +660,8 @@ class VimState
     
             if updating
                 return
-            if internal_change_timeout_var
-                clearTimeout(internal_change_timeout_var)
+            #if internal_change_timeout_var
+                #clearTimeout(internal_change_timeout_var)
             internal_change = true
             try
 
@@ -692,9 +689,9 @@ class VimState
                 console.log err
                 console.log 'problem changing panes'
     
-            internal_change_timeout_var =
-                setTimeout(( -> internal_change = false), 5)
-            #internal_change = false
+            #internal_change_timeout_var =
+                #setTimeout(( -> internal_change = false), 5)
+            internal_change = false
   
     afterOpen: =>
         #console.log 'in after open'
@@ -849,7 +846,6 @@ class VimState
                         editorview.classList.add(mode)
                     else
                         editorview.classList.remove(mode)
-  
     updateStatusBarWithText:(text, addcursor, loc) ->
         if addcursor
             text = text[0..loc-1].concat('&#9632').concat(text[loc+1..])
@@ -857,7 +853,8 @@ class VimState
         q = '<samp>'
         qend = '</samp>'
         element.innerHTML = q.concat(text).concat(qend)
-  
+
     updateStatusBar: ->
         element.innerHTML = @mode
+
 
