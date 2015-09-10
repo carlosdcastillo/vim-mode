@@ -77,7 +77,7 @@ class RWindow
 class RTabpage
     constructor:(data) ->
         @data = data
-    
+
 session = undefined
 types = []
 tmpsession.request('vim_get_api_info', [], (err, res) ->
@@ -136,41 +136,55 @@ neovim_send_message = (message,f = undefined) ->
 neovim_set_text = (text, start, end, delta) ->
     lines = text.split('\n')
     lines = lines[0..lines.length-2]
-    neovim_send_message(['vim_get_current_buffer',[]],(buf) ->
-        console.log 'buff',buf
-        neovim_send_message(['buffer_line_count',[buf]], (vim_cnt) ->
-            console.log 'vimcnt',vim_cnt
-            neovim_send_message(['buffer_get_line_slice',
-                [buf, 0, parseInt(vim_cnt), true, false]], (vim_lines_r) ->
-                vim_lines = []
-                for item in vim_lines_r
-                    vim_lines.push buf2str(item)
-                console.log 'vim_lines', vim_lines
-                console.log 'lines',lines
-                l = []
-                pos = 0
-                for pos in [0..vim_lines.length + delta - 1]
-                    item = vim_lines[pos]
-                    if pos < start
-                        l.push(item)
+    neovim_send_message(['vim_get_current_buffer',[]],
+        ((buf) ->
+            console.log 'buff',buf
+            neovim_send_message(['buffer_line_count',[buf]],
+                ((vim_cnt) ->
+                    console.log 'vimcnt',vim_cnt
+                    neovim_send_message(['buffer_get_line_slice', [buf, 0, 
+                                                                    parseInt(vim_cnt), true, 
+                                                                    false]], 
+                        ((vim_lines_r) ->
+                            vim_lines = []
+                            for item in vim_lines_r
+                                vim_lines.push buf2str(item)
+                            console.log 'vim_lines', vim_lines
+                            console.log 'lines',lines
+                            l = []
+                            pos = 0
+                            for pos in [0..vim_lines.length + delta - 1]
+                                item = vim_lines[pos]
+                                if pos < start
+                                    l.push(item)
 
-                    if pos >= start and pos <= end + delta
-                        l.push(lines[pos])
-                    
-                    if pos > end + delta
-                        l.push(vim_lines[pos-delta])
+                                if pos >= start and pos <= end + delta
+                                    l.push(lines[pos])
+                                
+                                if pos > end + delta
+                                    l.push(vim_lines[pos-delta])
 
-                neovim_send_message(['buffer_set_line_slice',
-                    [buf,0,l.length,true,false,l]], ( -> 
-                        if delta < 0
-                            for i in [0..(-delta - 1)]
-
-                                neovim_send_message(['buffer_del_line',
-                                    [buf, l.length + i]])
+                            neovim_send_message(['buffer_set_line_slice', 
+                                                [buf,0,l.length,true]],
+                                                del_line(buf,l,delta,-delta))
+                        )
                     )
                 )
             )
         )
+    )
+
+del_line = (buf, l, delta, i) ->
+    ( ->
+        if delta < 0 and i isnt 0
+            neovim_send_message(['buffer_del_line', [buf, l.length + i]], 
+                                del_line(buf, l, delta, i-1))
+        else
+            neovim_send_message(['vim_command',['redraw!']],
+                ( ->
+                    updating = false
+                )
+            )
     )
 
 
@@ -196,7 +210,6 @@ real_update = () ->
         item = curr_updates[curr_updates.length - 1]
         neovim_set_text(item.text, mn, mx, tot)
         setTimeout(( ->
-            updating = false
             neovim_send_message(['vim_command',['redraw!']])
         ), 20)
         
@@ -210,8 +223,9 @@ register_change_handler = () ->
             lupdates.push({text: q, start: change.start, \
                 end: change.end, delta: change.bufferDelta})
 
-            updating_change_timeout_var =
-                setTimeout(( -> real_update()), 20)
+            #updating_change_timeout_var =
+                #setTimeout(( -> real_update()), 20)
+            real_update()
 
     )
 
@@ -235,7 +249,7 @@ sync_lines = () ->
                 current_editor.buffer.append(diff, append_options)
                 neovim_send_message(['vim_command',['redraw!']])
             else if current_editor.buffer.getLastRow() > parseInt(nLines)
-                for i in [parseInt(nLines)..current_editor.buffer.getLastRow()]
+                for i in [parseInt(nLines)..current_editor.buffer.getLastRow()-1]
                     current_editor.buffer.deleteRow(i)
 
             #this should be done, but breaks everything, so I'm not doing it:
@@ -252,6 +266,7 @@ sync_lines = () ->
 
         internal_change_timeout_var =
             setTimeout(( -> internal_change = false), 5)
+        #internal_change = false
     )
 
 ns_redraw_win_end = () ->
@@ -550,6 +565,7 @@ class EventHandler
                 options)
         internal_change_timeout_var =
             setTimeout(( -> internal_change = false), 5)
+        #internal_change = false
 
 module.exports =
 class VimState
@@ -678,6 +694,7 @@ class VimState
     
             internal_change_timeout_var =
                 setTimeout(( -> internal_change = false), 5)
+            #internal_change = false
   
     afterOpen: =>
         #console.log 'in after open'
