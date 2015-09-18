@@ -27,6 +27,7 @@ active_change = true
 
 scrolltopchange_subscription = undefined
 bufferchange_subscription = undefined
+bufferchangeend_subscription = undefined
 cursorpositionchange_subscription = undefined
 
 scrolltop = undefined
@@ -122,15 +123,18 @@ buf2str = (buffer) ->
 
 neovim_send_message = (message,f = undefined) ->
     try
-        session.request(message[0], message[1], (err, res) ->
-            if f
-                if typeof(res) is 'number'
-                    f(util.inspect(res))
-                else
-                    f(res)
-        )
+        if message[0] and message[1]
+            session.request(message[0], message[1], (err, res) ->
+                if f
+                    if typeof(res) is 'number'
+                        f(util.inspect(res))
+                    else
+                        f(res)
+            )
     catch err
         console.log 'error in neovim_send_message '+err
+        console.log 'm1:',message[0]
+        console.log 'm2:',message[1]
 
 
 neovim_set_text = (text, start, end, delta) ->
@@ -156,13 +160,22 @@ neovim_set_text = (text, start, end, delta) ->
                             for pos in [0..vim_lines.length + delta - 1]
                                 item = vim_lines[pos]
                                 if pos < start
-                                    l.push(item)
+                                    if item
+                                        l.push(item)
+                                    else
+                                        l.push('')
 
                                 if pos >= start and pos <= end + delta
-                                    l.push(lines[pos])
+                                    if lines[pos]
+                                        l.push(lines[pos])
+                                    else
+                                        l.push('')
                                 
                                 if pos > end + delta
-                                    l.push(vim_lines[pos-delta])
+                                    if vim_lines[pos-delta]
+                                        l.push(vim_lines[pos-delta])
+                                    else
+                                        l.push('')
 
                             neovim_send_message(['buffer_set_line_slice', 
                                                 [buf,0,l.length,true,false,l]],
@@ -204,13 +217,19 @@ real_update = () ->
 register_change_handler = () ->
     bufferchange_subscription = current_editor.onDidChange ( (change)  ->
 
-        if not internal_change and not updating
+        if not internal_change
             q = current_editor.getText()
             lupdates.push({text: q, start: change.start, \
                 end: change.end, delta: change.bufferDelta})
+
+        if not internal_change and not updating
             real_update()
     )
 
+    bufferchangeend_subscription = current_editor.onDidStopChanging ( ()  ->
+        if not internal_change and not updating
+            sync_lines()
+    )
   
 sync_lines = () ->
 
@@ -241,20 +260,16 @@ sync_lines = () ->
             else
                 internal_change = false
 
-            #this should be done, but breaks everything, so I'm not doing it:
+            lines = current_editor.buffer.getLines()
+            pos = 0
+            for item in lines
+                if item.length > 96
+                    options =  { normalizeLineEndings: true, undo: 'skip' }
+                    current_editor.buffer.setTextInRange(new Range(
+                        new Point(pos,96),
+                        new Point(pos,item.length)),'',options)
+                pos = pos + 1
 
-            #lines = current_editor.buffer.getLines()
-            #pos = 0
-            #for item in lines
-            #    if item.length > 96
-            #        options =  { normalizeLineEndings: true, undo: 'skip' }
-            #        current_editor.buffer.setTextInRange(new Range(
-            #            new Point(pos,96),
-            #            new Point(pos,item.length)),'',options)
-            #    pos = pos + 1
-
-        #internal_change_timeout_var =
-            #setTimeout(( -> internal_change = false), 5)
         )
 
 ns_redraw_win_end = () ->
@@ -333,11 +348,10 @@ vim_mode_save_file = () ->
     console.log 'inside neovim save file'
     neovim_send_message(['vim_command',['write']])
 
-cursorPositionChanged = (event) ->
+cursorPosChanged = (event) ->
     
     if not internal_change
         if editor_views[current_editor.getURI()].classList.contains('is-focused')
-            console.log 'becerro'
             pos = event.newBufferPosition
             r = pos.row + 1
             c = pos.column + 1
@@ -402,8 +416,6 @@ class EventHandler
         if updating
             return
             
-        #if internal_change_timeout_var
-            #clearTimeout(internal_change_timeout_var)
         internal_change = true
         dirty = (false for i in [0..@rows-2])
 
@@ -606,7 +618,6 @@ class VimState
             @statusbar =
                 document.querySelector('status-bar').addLeftTile(item:element,
                 priority:10 )
-
         )
 
         atom.workspace.onDidChangeActivePaneItem @activePaneChanged
@@ -695,13 +706,13 @@ class VimState
                                 current_editor.onDidChangeScrollTop scrollTopChanged
         
                             cursorpositionchange_subscription = 
-                                current_editor.onDidChangeCursorPosition cursorPositionChanged
+                                current_editor.onDidChangeCursorPosition cursorPosChanged
 
                             if bufferchange_subscription
-                                bufferchange_subscription.dispose()
+                               bufferchange_subscription.dispose()
 
-                            #if bufferendchange_subscription
-                                #bufferendchange_subscription.dispose()
+                            if bufferchangeend_subscription
+                               bufferchangeend_subscription.dispose()
 
                             register_change_handler()
         
@@ -786,7 +797,6 @@ class VimState
             if dirty
     
                 options =  { normalizeLineEndings: true, undo: 'skip' }
-                #options =  { normalizeLineEndings:false }
     
                 if DEBUG
                     initial = 0
@@ -835,9 +845,6 @@ class VimState
     
         subscriptions['redraw'] = true
   
-  
-  
-  
     # Private: Used to enable command mode.
     #
     # Returns nothing.
@@ -869,6 +876,7 @@ class VimState
                         editorview.classList.add(mode)
                     else
                         editorview.classList.remove(mode)
+                       
     updateStatusBarWithText:(text, addcursor, loc) ->
         if addcursor
             text = text[0..loc-1].concat('&#9632').concat(text[loc+1..])

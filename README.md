@@ -10,7 +10,7 @@ I've update everything to work with the version in master of
 On the [Atom](https://atom.io/) side I've tested it with version 0.175 and
 0.184 and seems to work fine. I am currently using version 0.207. In versions
 0.206 and later you will need to change the name of the directory vim-mode to
-something else (I use the name nvim-mode). I you don't Atom confuses this
+something else (I use the name nvim-mode). If you don't Atom confuses this
 plugin with the one developed by GitHub.
 
 It should be usable enough that if you are adventurous you will be able to get
