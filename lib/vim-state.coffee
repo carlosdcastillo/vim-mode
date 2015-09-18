@@ -27,11 +27,11 @@ active_change = true
 
 scrolltopchange_subscription = undefined
 bufferchange_subscription = undefined
+cursorpositionchange_subscription = undefined
+
 scrolltop = undefined
 internal_change = false
 updating = false
-#internal_change_timeout_var = undefined
-updating_change_timeout_var = undefined
 
 element = document.createElement("item-view")
 setInterval ( -> ns_redraw_win_end()), 150
@@ -181,9 +181,13 @@ del_line = (buf, l, delta, i) ->
                                 del_line(buf, l, delta, i-1))
         else
             updating = false
-            neovim_send_message(['vim_command',['redraw!']])
+            internal_change = true
+            neovim_send_message(['vim_command',['redraw!']], 
+                (() ->
+                    internal_change = false
+                )
+            )
     )
-
 
 real_update = () ->
     if not updating
@@ -191,52 +195,32 @@ real_update = () ->
 
         curr_updates = lupdates.slice(0)
         lupdates = []
+        if curr_updates.length > 0
 
-        mn = curr_updates[0].start
-        mx = curr_updates[0].end
-        tot = 0
-
-        for item in curr_updates
-            console.log 'item:',item
-            if item.start < mn
-                mn = item.start
-            if item.end > mx
-                mx = item.end
-            tot = tot + item.delta
-
-        item = curr_updates[curr_updates.length - 1]
-        neovim_set_text(item.text, mn, mx, tot)
-        #setTimeout(( ->
-            #neovim_send_message(['vim_command',['redraw!']])
-        #), 20)
+            for item in curr_updates
+                console.log 'item:',item
+                neovim_set_text(item.text, item.start, item.end, item.delta)
         
 register_change_handler = () ->
     bufferchange_subscription = current_editor.onDidChange ( (change)  ->
 
-        q = current_editor.getText()
         if not internal_change and not updating
-            if updating_change_timeout_var
-                clearTimeout(updating_change_timeout_var)
+            q = current_editor.getText()
             lupdates.push({text: q, start: change.start, \
                 end: change.end, delta: change.bufferDelta})
-
-            updating_change_timeout_var =
-                setTimeout(( -> real_update()), 20)
-            #real_update()
-
+            real_update()
     )
 
-
+  
 sync_lines = () ->
 
-    neovim_send_message(['vim_eval',["line('$')"]], (nLines) ->
-        if updating
-            return
-        #if internal_change_timeout_var
-            #clearTimeout(internal_change_timeout_var)
-        internal_change = true
+    if updating
+        return
 
-        if current_editor
+    if current_editor
+        internal_change = true
+        neovim_send_message(['vim_eval',["line('$')"]], (nLines) ->
+
             if current_editor.buffer.getLastRow() < parseInt(nLines)
                 nl = parseInt(nLines) - current_editor.buffer.getLastRow()
                 diff = ''
@@ -244,10 +228,18 @@ sync_lines = () ->
                     diff = diff + '\n'
                 append_options = {normalizeLineEndings: true}
                 current_editor.buffer.append(diff, append_options)
-                neovim_send_message(['vim_command',['redraw!']])
+                neovim_send_message(['vim_command',['redraw!']], 
+                    (() ->
+                        internal_change = false
+                    )
+                )
             else if current_editor.buffer.getLastRow() > parseInt(nLines)
                 for i in [parseInt(nLines)..current_editor.buffer.getLastRow()-1]
                     current_editor.buffer.deleteRow(i)
+
+                internal_change = false
+            else
+                internal_change = false
 
             #this should be done, but breaks everything, so I'm not doing it:
 
@@ -263,8 +255,7 @@ sync_lines = () ->
 
         #internal_change_timeout_var =
             #setTimeout(( -> internal_change = false), 5)
-        internal_change = false
-    )
+        )
 
 ns_redraw_win_end = () ->
 
@@ -305,7 +296,7 @@ ns_redraw_win_end = () ->
 
     focused = editor_views[uri].classList.contains('is-focused')
 
-    if true
+    if not updating and not internal_change
         neovim_send_message(['vim_eval',["expand('%:p')"]], (filename) ->
             filename = buf2str(filename)
             #console.log 'filename reported by vim:',filename
@@ -342,6 +333,24 @@ vim_mode_save_file = () ->
     console.log 'inside neovim save file'
     neovim_send_message(['vim_command',['write']])
 
+cursorPositionChanged = (event) ->
+    
+    if not internal_change
+        if editor_views[current_editor.getURI()].classList.contains('is-focused')
+            console.log 'becerro'
+            pos = event.newBufferPosition
+            r = pos.row + 1
+            c = pos.column + 1
+            sel = current_editor.getSelectedBufferRange()
+            console.log 'sel:',sel
+            neovim_send_message(['vim_command',['cal cursor('+r+','+c+')']],
+                (() ->
+                    if not sel.isEmpty()
+                        current_editor.setSelectedBufferRange(sel, 
+                            sel.end.isLessThan(sel.start))
+                )
+            )
+
 scrollTopChanged = () ->
     if not internal_change
         if editor_views[current_editor.getURI()].classList.contains('is-focused')
@@ -356,12 +365,19 @@ scrollTopChanged = () ->
                     neovim_send_message(['vim_input',['<ScrollWheelDown>']])
         else
 
-            rng = current_editor.getSelectedBufferRange()
-            if not rng.isEmpty()
-                value = rng.end.row + 1
-                neovim_send_message(['vim_input',[''+value+'G']])
-                value = rng.end.column
-                neovim_send_message(['vim_input',[''+value+'|']])
+            sels = current_editor.getSelectedBufferRanges()
+            console.log 'sels:',sels
+            for sel in sels
+                r = sel.start.row + 1
+                c = sel.start.column + 1
+                console.log 'sel:',sel
+                neovim_send_message(['vim_command',['cal cursor('+r+','+c+')']],
+                    (() ->
+                        if not sel.isEmpty()
+                            current_editor.setSelectedBufferRange(sel, 
+                                sel.end.isLessThan(sel.start))
+                    )
+                )
 
     scrolltop = current_editor.getScrollTop()
 
@@ -482,7 +498,6 @@ class EventHandler
                                 step = -1
 
                             for row in range(start,stop,step)
-
                                 dirty[row] = true
                                 target_row = screen[row]
                                 source_row = screen[row + count]
@@ -551,8 +566,11 @@ class EventHandler
         @vimState.redraw_screen(@rows, dirty)
 
         if scrolled
-            neovim_send_message(['vim_command',['redraw!']])
-            scrolled = false
+            neovim_send_message(['vim_command',['redraw!']], 
+                (() ->
+                    scrolled = false
+                )
+            )
 
         options =  { normalizeLineEndings: true, undo: 'skip' }
         if current_editor
@@ -560,8 +578,6 @@ class EventHandler
                 new Point(current_editor.buffer.getLastRow(),0),
                 new Point(current_editor.buffer.getLastRow(),96)),'',
                 options)
-        #internal_change_timeout_var =
-            #setTimeout(( -> internal_change = false), 5)
         internal_change = false
 
 module.exports =
@@ -598,10 +614,10 @@ class VimState
             e.preventDefault()
             e.stopPropagation()
             vim_mode_save_file()
-    
+
         @editorView.onkeypress = (e) =>
             q1 = @editorView.classList.contains('is-focused')
-            q2 = @editorView.classList.contains('autocomplete-active')
+            q2 = @editorView.classList.contains('autocomplete-active')   
             if q1 and not q2
                 q =  String.fromCharCode(e.which)
                 neovim_send_message(['vim_input',[q]])
@@ -619,6 +635,7 @@ class VimState
                     false
             else
                 true
+  
   
   
     translateCode: (code, shift, control) ->
@@ -657,40 +674,46 @@ class VimState
   
     activePaneChanged: =>
         if active_change
-    
             if updating
                 return
-            #if internal_change_timeout_var
-                #clearTimeout(internal_change_timeout_var)
             internal_change = true
             try
 
-                filename = atom.workspace.getActiveTextEditor().getURI()
-                neovim_send_message(['vim_command',['e '+ filename]],(x) =>
-                    if scrolltopchange_subscription
-                        scrolltopchange_subscription.dispose()
-                    if bufferchange_subscription
-                        bufferchange_subscription.dispose()
-    
-                    current_editor = atom.workspace.getActiveTextEditor()
-                    if current_editor
-                        scrolltopchange_subscription =
-                            current_editor.onDidChangeScrollTop scrollTopChanged
-    
-                        register_change_handler()
-    
-                    scrolltop = undefined
-    
-                    @tlnumber = 0
-                    @afterOpen()
-                )
+                current_editor = atom.workspace.getActiveTextEditor()
+                if current_editor
+                    filename = atom.workspace.getActiveTextEditor().getURI()
+                    neovim_send_message(['vim_command',['e '+ filename]],(x) =>
+
+                        if scrolltopchange_subscription
+                            scrolltopchange_subscription.dispose()
+                        if cursorpositionchange_subscription
+                            cursorpositionchange_subscription.dispose()
+        
+                        current_editor = atom.workspace.getActiveTextEditor()
+                        if current_editor
+                            scrolltopchange_subscription =
+                                current_editor.onDidChangeScrollTop scrollTopChanged
+        
+                            cursorpositionchange_subscription = 
+                                current_editor.onDidChangeCursorPosition cursorPositionChanged
+
+                            if bufferchange_subscription
+                                bufferchange_subscription.dispose()
+
+                            #if bufferendchange_subscription
+                                #bufferendchange_subscription.dispose()
+
+                            register_change_handler()
+        
+                        scrolltop = undefined
+                        @tlnumber = 0
+                        @afterOpen()
+                    )
             catch err
     
                 console.log err
                 console.log 'problem changing panes'
     
-            #internal_change_timeout_var =
-                #setTimeout(( -> internal_change = false), 5)
             internal_change = false
   
     afterOpen: =>
