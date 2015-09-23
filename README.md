@@ -4,6 +4,7 @@ This is a work in progress Atom package that implements complete vim bindings
 by connecting to Neovim.
 
 # What's new?
+
 I've update everything to work with the version in master of
 [Neovim](http://github.com/neovim/neovim)
 
