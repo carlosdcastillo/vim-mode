@@ -137,6 +137,10 @@ neovim_send_message = (message,f = undefined) ->
         console.log 'm2:',message[1]
 
 
+#This function changes the text between start and end changing the number
+#of lines by delta. The change occurs directionaly from Atom -> Neovim.
+#There is a bunch of bookkeeping to make sure the change is unidirectional.
+
 neovim_set_text = (text, start, end, delta) ->
     lines = text.split('\n')
     lines = lines[0..lines.length-2]
@@ -191,6 +195,10 @@ neovim_set_text = (text, start, end, delta) ->
         )
     )
 
+#This function sends the data and updates the the cursor location. It then
+#calls a function to update the state to the syncing from Atom -> Neovim
+#stops and the Neovim -> Atom change resumes.
+
 send_data = (buf, l, delta, i, r, c) ->
     ( ->
             j = l.length + i
@@ -214,6 +222,9 @@ send_data = (buf, l, delta, i, r, c) ->
                                 update_state())
     )
 
+#This function redraws everything and updates the state to re-enable
+#Neovim -> Atom syncing.
+
 update_state = () ->
     ( ->
 
@@ -225,6 +236,9 @@ update_state = () ->
             )
         )
     )
+
+#This function performs the "real update" from Atom -> Neovim. In case 
+#of Cmd-X, Cmd-V, etc.
 
 real_update = () ->
     if not updating
@@ -238,6 +252,11 @@ real_update = () ->
                 #console.log 'item:',item
                 neovim_set_text(item.text, item.start, item.end, item.delta)
             
+#This code registers the change handler. The undo fix is a workaround
+#a bug I was not able to detect that coupled an extra state when
+#I did Cmd-X and then pressed u. Challenge: give me the set of reasons that
+#trigger such situation in the code.
+
 register_change_handler = () ->
     bufferchange_subscription = current_editor.onDidChange ( (change)  ->
 
@@ -262,6 +281,9 @@ register_change_handler = () ->
             #sync_lines()
     #)
   
+#This code is called indirectly by timer and it's sole purpose is to sync the
+# number of lines from Neovim -> Atom.
+
 sync_lines = () ->
 
     if updating
@@ -292,6 +314,8 @@ sync_lines = () ->
             else
                 internal_change = false
 
+            #This should be done but breaks things:
+
             #lines = current_editor.buffer.getLines()
             #pos = 0
             #for item in lines
@@ -304,6 +328,9 @@ sync_lines = () ->
 
         )
 
+# This is directly called by timer and makes sure of a bunch of housekeeping
+#functions like, marking the buffer modified, working around some Neovim for
+#Windows issues and invoking the code to sync the number of lines.
 
 ns_redraw_win_end = () ->
 
