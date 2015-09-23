@@ -180,7 +180,8 @@ neovim_set_text = (text, start, end, delta) ->
 
                             #neovim_send_message(['buffer_set_line_slice', 
                                                 #[buf,0,l.length,true,false,l]],
-                                                #del_line(buf,l,delta,-delta, cpos.row+1, cpos.column+1))
+                                                #del_line(buf,l,delta,-delta, 
+                                                #cpos.row+1, cpos.column+1))
                             f = send_data(buf,l,delta,-delta, cpos.row+1, cpos.column+1)
                             f()
                         )
