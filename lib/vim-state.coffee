@@ -140,12 +140,13 @@ neovim_send_message = (message,f = undefined) ->
 neovim_set_text = (text, start, end, delta) ->
     lines = text.split('\n')
     lines = lines[0..lines.length-2]
+    cpos = current_editor.getCursorScreenPosition()
     neovim_send_message(['vim_get_current_buffer',[]],
         ((buf) ->
-            console.log 'buff',buf
+            #console.log 'buff',buf
             neovim_send_message(['buffer_line_count',[buf]],
                 ((vim_cnt) ->
-                    console.log 'vimcnt',vim_cnt
+                    #console.log 'vimcnt',vim_cnt
                     neovim_send_message(['buffer_get_line_slice', [buf, 0, 
                                                                     parseInt(vim_cnt), true, 
                                                                     false]], 
@@ -153,8 +154,8 @@ neovim_set_text = (text, start, end, delta) ->
                             vim_lines = []
                             for item in vim_lines_r
                                 vim_lines.push buf2str(item)
-                            console.log 'vim_lines', vim_lines
-                            console.log 'lines',lines
+                            #console.log 'vim_lines', vim_lines
+                            #console.log 'lines',lines
                             l = []
                             pos = 0
                             for pos in [0..vim_lines.length + delta - 1]
@@ -177,9 +178,11 @@ neovim_set_text = (text, start, end, delta) ->
                                     else
                                         l.push('')
 
-                            neovim_send_message(['buffer_set_line_slice', 
-                                                [buf,0,l.length,true,false,l]],
-                                                del_line(buf,l,delta,-delta))
+                            #neovim_send_message(['buffer_set_line_slice', 
+                                                #[buf,0,l.length,true,false,l]],
+                                                #del_line(buf,l,delta,-delta, cpos.row+1, cpos.column+1))
+                            f = send_data(buf,l,delta,-delta, cpos.row+1, cpos.column+1)
+                            f()
                         )
                     )
                 )
@@ -187,19 +190,39 @@ neovim_set_text = (text, start, end, delta) ->
         )
     )
 
-del_line = (buf, l, delta, i) ->
+send_data = (buf, l, delta, i, r, c) ->
     ( ->
-        if delta < 0 and i isnt 0
-            neovim_send_message(['buffer_del_line', [buf, l.length + i]], 
-                                del_line(buf, l, delta, i-1))
-        else
-            updating = false
+            j = l.length + i
+            lines = []
+            l2 = []
+            for item in l
+                item2 = item.split('"').join('\\"')
+                item2 = item.split('\\').join('\\\\')
+                l2.push '"'+item2+'"'
+
+            lines.push('cal setline(1, ['+l2.join()+'])')
+            lines.push('redraw!')
+
+            while j > l.length
+                lines.push(''+(j)+'d')
+                j = j - 1
+            lines.push('cal cursor('+r+','+c+')')
+            console.log 'lines2',lines
             internal_change = true
-            neovim_send_message(['vim_command',['redraw!']], 
-                (() ->
-                    internal_change = false
-                )
+            neovim_send_message(['vim_command', [lines.join(' | ')]], 
+                                update_state())
+    )
+
+update_state = () ->
+    ( ->
+
+        updating = false
+        internal_change = true
+        neovim_send_message(['vim_command',['redraw!']], 
+            (() ->
+                internal_change = false
             )
+        )
     )
 
 real_update = () ->
@@ -211,25 +234,32 @@ real_update = () ->
         if curr_updates.length > 0
 
             for item in curr_updates
-                console.log 'item:',item
+                #console.log 'item:',item
                 neovim_set_text(item.text, item.start, item.end, item.delta)
-        
+            
 register_change_handler = () ->
     bufferchange_subscription = current_editor.onDidChange ( (change)  ->
 
-        if not internal_change
+        if not internal_change and not updating
+
             q = current_editor.getText()
-            lupdates.push({text: q, start: change.start, \
-                end: change.end, delta: change.bufferDelta})
+            text_list = q.split('\n')
+            undo_fix = 
+                not (change.start is 0 and change.end is text_list.length-1 \
+                        and change.bufferDelta is 0)
+            if undo_fix
+                console.log 'start:',change.start,'end:',change.end,'delta:',change.bufferDelta
 
-        if not internal_change and not updating
-            real_update()
+                lupdates.push({text: q, start: change.start, \
+                    end: change.end, delta: change.bufferDelta})
+
+                real_update()
     )
 
-    bufferchangeend_subscription = current_editor.onDidStopChanging ( ()  ->
-        if not internal_change and not updating
-            sync_lines()
-    )
+    #bufferchangeend_subscription = current_editor.onDidStopChanging ( ()  ->
+        #if not internal_change and not updating
+            #sync_lines()
+    #)
   
 sync_lines = () ->
 
@@ -247,11 +277,12 @@ sync_lines = () ->
                     diff = diff + '\n'
                 append_options = {normalizeLineEndings: true}
                 current_editor.buffer.append(diff, append_options)
-                neovim_send_message(['vim_command',['redraw!']], 
+
+                neovim_send_message(['vim_command',['redraw!']],
                     (() ->
                         internal_change = false
                     )
-                )
+                 )
             else if current_editor.buffer.getLastRow() > parseInt(nLines)
                 for i in [parseInt(nLines)..current_editor.buffer.getLastRow()-1]
                     current_editor.buffer.deleteRow(i)
@@ -260,17 +291,18 @@ sync_lines = () ->
             else
                 internal_change = false
 
-            lines = current_editor.buffer.getLines()
-            pos = 0
-            for item in lines
-                if item.length > 96
-                    options =  { normalizeLineEndings: true, undo: 'skip' }
-                    current_editor.buffer.setTextInRange(new Range(
-                        new Point(pos,96),
-                        new Point(pos,item.length)),'',options)
-                pos = pos + 1
+            #lines = current_editor.buffer.getLines()
+            #pos = 0
+            #for item in lines
+                #if item.length > 96
+                    #options =  { normalizeLineEndings: true, undo: 'skip' }
+                    #current_editor.buffer.setTextInRange(new Range(
+                        #new Point(pos,96),
+                        #new Point(pos,item.length)),'',options)
+                #pos = pos + 1
 
         )
+
 
 ns_redraw_win_end = () ->
 
@@ -321,14 +353,14 @@ ns_redraw_win_end = () ->
             nfn = normalize_filename(filename)
 
             if ncefn and nfn and nfn isnt ncefn
-                console.log '-------------------------------',nfn
-                console.log '*******************************',ncefn
+                #console.log '-------------------------------',nfn
+                #console.log '*******************************',ncefn
                 atom.workspace.open(filename)
                 
             else
 
                 sync_lines()
-            )
+        )
 
     active_change = false
     for texteditor in atom.workspace.getTextEditors()
@@ -345,7 +377,7 @@ lineSpacing = ->
     return Math.floor(lineheight * fontsize)
 
 vim_mode_save_file = () ->
-    console.log 'inside neovim save file'
+    #console.log 'inside neovim save file'
     neovim_send_message(['vim_command',['write']])
 
 cursorPosChanged = (event) ->
@@ -356,7 +388,7 @@ cursorPosChanged = (event) ->
             r = pos.row + 1
             c = pos.column + 1
             sel = current_editor.getSelectedBufferRange()
-            console.log 'sel:',sel
+            #console.log 'sel:',sel
             neovim_send_message(['vim_command',['cal cursor('+r+','+c+')']],
                 (() ->
                     if not sel.isEmpty()
@@ -368,23 +400,23 @@ cursorPosChanged = (event) ->
 scrollTopChanged = () ->
     if not internal_change
         if editor_views[current_editor.getURI()].classList.contains('is-focused')
-            console.log 'scrolled'
+            #console.log 'scrolled'
             if scrolltop
                 diff = scrolltop - current_editor.getScrollTop()
                 if  diff > 0
-                    console.log 'scroll up:',diff
+                    #console.log 'scroll up:',diff
                     neovim_send_message(['vim_input',['<ScrollWheelUp>']])
                 else
-                    console.log 'scroll down:',diff
+                    #console.log 'scroll down:',diff
                     neovim_send_message(['vim_input',['<ScrollWheelDown>']])
         else
 
             sels = current_editor.getSelectedBufferRanges()
-            console.log 'sels:',sels
+            #console.log 'sels:',sels
             for sel in sels
                 r = sel.start.row + 1
                 c = sel.start.column + 1
-                console.log 'sel:',sel
+                #console.log 'sel:',sel
                 neovim_send_message(['vim_command',['cal cursor('+r+','+c+')']],
                     (() ->
                         if not sel.isEmpty()
@@ -402,7 +434,7 @@ class EventHandler
         qbottom = current_editor.getScrollBottom()
 
         @rows = Math.floor((qbottom - qtop)/lineSpacing()+1)
-        console.log 'rows:', @rows
+        #console.log 'rows:', @rows
 
         height = Math.floor(50+(@rows-0.5) * lineSpacing())
 
@@ -590,7 +622,9 @@ class EventHandler
                 new Point(current_editor.buffer.getLastRow(),0),
                 new Point(current_editor.buffer.getLastRow(),96)),'',
                 options)
+
         internal_change = false
+
 
 module.exports =
 class VimState
@@ -650,7 +684,7 @@ class VimState
   
   
     translateCode: (code, shift, control) ->
-        console.log 'code:',code
+        #console.log 'code:',code
         if control && code>=65 && code<=90
             String.fromCharCode(code-64)
         else if code>=8 && code<=10 || code==13 || code==27
@@ -687,7 +721,10 @@ class VimState
         if active_change
             if updating
                 return
+
+
             internal_change = true
+
             try
 
                 current_editor = atom.workspace.getActiveTextEditor()
@@ -830,7 +867,7 @@ class VimState
             current_editor.setScrollTop(lineSpacing()*@tlnumber)
   
     neovim_subscribe: =>
-        console.log 'neovim_subscribe'
+        #console.log 'neovim_subscribe'
     
         eventHandler = new EventHandler this
     
