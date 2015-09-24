@@ -7,6 +7,7 @@ os = require 'os'
 util = require 'util'
 
 Session = require 'msgpack5rpc'
+VimUtils = require './vim-utils'
 
 if os.platform() is 'win32'
     CONNECT_TO = '\\\\.\\pipe\\neovim'
@@ -39,27 +40,6 @@ updating = false
 
 element = document.createElement("item-view")
 interval_sync = setInterval ( -> ns_redraw_win_end()), 150
-
-range = (start, stop, step) ->
-    if typeof stop is "undefined"
-        # one param defined
-        stop = start
-        start = 0
-    step = 1  if typeof step is "undefined"
-    return []  if (step > 0 and start >= stop) or (step < 0 and start <= stop)
-    result = []
-    i = start
-
-    while (if step > 0 then i < stop else i > stop)
-        result.push i
-        i += step
-    result
-
-normalize_filename = (filename) ->
-    if filename
-        filename = filename.split('\\').join('/')
-    return filename
-
 
 socket2 = new net.Socket()
 socket2.connect(CONNECT_TO)
@@ -373,8 +353,8 @@ ns_redraw_win_end = () ->
             #console.log 'filename reported by vim:',filename
             #console.log 'current editor uri:',uri
 
-            ncefn =  normalize_filename(uri)
-            nfn = normalize_filename(filename)
+            ncefn =  VimUtils.normalize_filename(uri)
+            nfn = VimUtils.normalize_filename(filename)
 
             if ncefn and nfn and nfn isnt ncefn
                 #console.log '-------------------------------',nfn
@@ -463,8 +443,8 @@ destroyPaneItem = (event) ->
                 filename = buf2str(filename)
                 console.log 'filename reported by vim:',filename
                 console.log 'current editor uri:',uri
-                ncefn =  normalize_filename(uri)
-                nfn =  normalize_filename(filename)
+                ncefn =  VimUtils.normalize_filename(uri)
+                nfn =  VimUtils.normalize_filename(filename)
 
                 if ncefn and nfn and nfn isnt ncefn
                     console.log '-------------------------------',nfn
@@ -645,15 +625,15 @@ class EventHandler
                                 stop = top - count + 1
                                 step = -1
 
-                            for row in range(start,stop,step)
+                            for row in VimUtils.range(start,stop,step)
                                 dirty[row] = true
                                 target_row = screen[row]
                                 source_row = screen[row + count]
-                                for col in range(left,right+1)
+                                for col in VimUtils.range(left,right+1)
                                     target_row[col] = source_row[col]
 
-                            for row in  range(stop, stop+count,step)
-                                for col in  range(left,right+1)
+                            for row in  VimUtils.range(stop, stop+count,step)
+                                for col in  VimUtils.range(left,right+1)
                                     screen[row][col] = ' '
 
                             scrolled = true
