@@ -8,6 +8,8 @@ util = require 'util'
 
 Session = require 'msgpack5rpc'
 VimUtils = require './vim-utils'
+VimGlobals = require './vim-globals'
+VimSync = require './vim-sync'
 
 if os.platform() is 'win32'
     CONNECT_TO = '\\\\.\\pipe\\neovim'
@@ -16,13 +18,11 @@ else
 
 DEBUG = false
 
-lupdates = []
 subscriptions = {}
 subscriptions['redraw'] = false
 screen = []
 screen_f = []
 scrolled = false
-current_editor = undefined
 editor_views = {}
 active_change = true
 
@@ -35,8 +35,6 @@ buffer_change_subscription = undefined
 buffer_destroy_subscription = undefined
 
 scrolltop = undefined
-internal_change = false
-updating = false
 
 element = document.createElement("item-view")
 interval_sync = setInterval ( -> ns_redraw_win_end()), 150
@@ -62,7 +60,6 @@ class RTabpage
     constructor:(data) ->
         @data = data
 
-session = undefined
 types = []
 tmpsession.request('vim_get_api_info', [], (err, res) ->
     metadata = res[1]
@@ -90,24 +87,15 @@ tmpsession.request('vim_get_api_info', [], (err, res) ->
     tmpsession.detach()
     socket = new net.Socket()
     socket.connect(CONNECT_TO)
-    session = new Session(types)
-    session.attach(socket, socket)
+    VimGlobals.session = new Session(types)
+    VimGlobals.session.attach(socket, socket)
 )
 
-buf2str = (buffer) ->
-    if not buffer
-        return ''
-    res = ''
-    i = 0
-    while i < buffer.length
-        res = res + String.fromCharCode(buffer[i])
-        i++
-    res
 
 neovim_send_message = (message,f = undefined) ->
     try
         if message[0] and message[1]
-            session.request(message[0], message[1], (err, res) ->
+            VimGlobals.session.request(message[0], message[1], (err, res) ->
                 if f
                     if typeof(res) is 'number'
                         f(util.inspect(res))
@@ -120,112 +108,7 @@ neovim_send_message = (message,f = undefined) ->
         console.log 'm2:',message[1]
 
 
-#This function changes the text between start and end changing the number
-#of lines by delta. The change occurs directionaly from Atom -> Neovim.
-#There is a bunch of bookkeeping to make sure the change is unidirectional.
 
-neovim_set_text = (text, start, end, delta) ->
-    lines = text.split('\n')
-    lines = lines[0..lines.length-2]
-    cpos = current_editor.getCursorScreenPosition()
-    neovim_send_message(['vim_get_current_buffer',[]],
-        ((buf) ->
-            #console.log 'buff',buf
-            neovim_send_message(['buffer_line_count',[buf]],
-                ((vim_cnt) ->
-                    #console.log 'vimcnt',vim_cnt
-                    neovim_send_message(['buffer_get_line_slice', [buf, 0,
-                                                                    parseInt(vim_cnt), true,
-                                                                    false]],
-                        ((vim_lines_r) ->
-                            vim_lines = []
-                            for item in vim_lines_r
-                                vim_lines.push buf2str(item)
-                            #console.log 'vim_lines', vim_lines
-                            #console.log 'lines',lines
-                            l = []
-                            pos = 0
-                            for pos in [0..vim_lines.length + delta - 1]
-                                item = vim_lines[pos]
-                                if pos < start
-                                    if item
-                                        l.push(item)
-                                    else
-                                        l.push('')
-
-                                if pos >= start and pos <= end + delta
-                                    if lines[pos]
-                                        l.push(lines[pos])
-                                    else
-                                        l.push('')
-
-                                if pos > end + delta
-                                    if vim_lines[pos-delta]
-                                        l.push(vim_lines[pos-delta])
-                                    else
-                                        l.push('')
-
-                            send_data(buf,l,delta,-delta, cpos.row+1, cpos.column+1)
-
-                        )
-                    )
-                )
-            )
-        )
-    )
-
-#This function sends the data and updates the the cursor location. It then
-#calls a function to update the state to the syncing from Atom -> Neovim
-#stops and the Neovim -> Atom change resumes.
-
-send_data = (buf, l, delta, i, r, c) ->
-    j = l.length + i
-    lines = []
-    l2 = []
-    for item in l
-        item2 = item.split('\\').join('\\\\')
-        item2 = item2.split('"').join('\\"')
-        l2.push '"'+item2+'"'
-
-    lines.push('cal setline(1, ['+l2.join()+'])')
-    lines.push('redraw!')
-
-    while j > l.length
-        lines.push(''+(j)+'d')
-        j = j - 1
-    lines.push('cal cursor('+r+','+c+')')
-    console.log 'lines2',lines
-    internal_change = true
-    neovim_send_message(['vim_command', [lines.join(' | ')]],
-                        update_state)
-
-#This function redraws everything and updates the state to re-enable
-#Neovim -> Atom syncing.
-
-update_state = () ->
-    updating = false
-    internal_change = true
-    neovim_send_message(['vim_command',['redraw!']],
-        (() ->
-            internal_change = false
-        )
-    )
-
-#This function performs the "real update" from Atom -> Neovim. In case
-#of Cmd-X, Cmd-V, etc.
-
-real_update = () ->
-    if not updating
-        updating = true
-
-        curr_updates = lupdates.slice(0)
-        lupdates = []
-        if curr_updates.length > 0
-
-            for item in curr_updates
-                #console.log 'item:',item
-                if item.uri is atom.workspace.getActiveTextEditor().getURI()
-                    neovim_set_text(item.text, item.start, item.end, item.delta)
 
 #This code registers the change handler. The undo fix is a workaround
 #a bug I was not able to detect what coupled an extra state when
@@ -233,27 +116,27 @@ real_update = () ->
 #trigger such situation in the code.
 
 register_change_handler = () ->
-    bufferchange_subscription = current_editor.onDidChange ( (change)  ->
+    bufferchange_subscription = VimGlobals.current_editor.onDidChange ( (change)  ->
 
-        if not internal_change and not updating
+        if not VimGlobals.internal_change and not VimGlobals.updating
 
-            q = current_editor.getText()
+            q = VimGlobals.current_editor.getText()
             text_list = q.split('\n')
             undo_fix =
                 not (change.start is 0 and change.end is text_list.length-1 \
                         and change.bufferDelta is 0)
             if undo_fix
-                console.log '(uri:',current_editor.getURI(),'start:',change.start
+                console.log '(uri:',VimGlobals.current_editor.getURI(),'start:',change.start
                 console.log 'end:',change.end,'delta:',change.bufferDelta,')'
 
-                lupdates.push({uri: current_editor.getURI(), text: q, start: change.start, \
+                VimGlobals.lupdates.push({uri: VimGlobals.current_editor.getURI(), text: q, start: change.start, \
                     end: change.end, delta: change.bufferDelta})
 
-                real_update()
+                VimSync.real_update()
     )
 
-    #bufferchangeend_subscription = current_editor.onDidStopChanging ( ()  ->
-        #if not internal_change and not updating
+    #bufferchangeend_subscription = VimGlobals.current_editor.onDidStopChanging ( ()  ->
+        #if not VimGlobals.internal_change and not VimGlobals.updating
             #sync_lines()
     #)
 
@@ -262,42 +145,42 @@ register_change_handler = () ->
 
 sync_lines = () ->
 
-    if updating
+    if VimGlobals.updating
         return
 
-    if current_editor
-        internal_change = true
+    if VimGlobals.current_editor
+        VimGlobals.internal_change = true
         neovim_send_message(['vim_eval',["line('$')"]], (nLines) ->
 
-            if current_editor.buffer.getLastRow() < parseInt(nLines)
-                nl = parseInt(nLines) - current_editor.buffer.getLastRow()
+            if VimGlobals.current_editor.buffer.getLastRow() < parseInt(nLines)
+                nl = parseInt(nLines) - VimGlobals.current_editor.buffer.getLastRow()
                 diff = ''
                 for i in [0..nl-1]
                     diff = diff + '\n'
                 append_options = {normalizeLineEndings: true}
-                current_editor.buffer.append(diff, append_options)
+                VimGlobals.current_editor.buffer.append(diff, append_options)
 
                 neovim_send_message(['vim_command',['redraw!']],
                     (() ->
-                        internal_change = false
+                        VimGlobals.internal_change = false
                     )
                  )
-            else if current_editor.buffer.getLastRow() > parseInt(nLines)
-                for i in [parseInt(nLines)..current_editor.buffer.getLastRow()-1]
-                    current_editor.buffer.deleteRow(i)
+            else if VimGlobals.current_editor.buffer.getLastRow() > parseInt(nLines)
+                for i in [parseInt(nLines)..VimGlobals.current_editor.buffer.getLastRow()-1]
+                    VimGlobals.current_editor.buffer.deleteRow(i)
 
-                internal_change = false
+                VimGlobals.internal_change = false
             else
-                internal_change = false
+                VimGlobals.internal_change = false
 
             #This should be done but breaks things:
 
-            #lines = current_editor.buffer.getLines()
+            #lines = VimGlobals.current_editor.buffer.getLines()
             #pos = 0
             #for item in lines
                 #if item.length > 96
                     #options =  { normalizeLineEndings: true, undo: 'skip' }
-                    #current_editor.buffer.setTextInRange(new Range(
+                    #VimGlobals.current_editor.buffer.setTextInRange(new Range(
                         #new Point(pos,96),
                         #new Point(pos,item.length)),'',options)
                 #pos = pos + 1
@@ -310,20 +193,20 @@ sync_lines = () ->
 
 ns_redraw_win_end = () ->
 
-    current_editor = atom.workspace.getActiveTextEditor()
+    VimGlobals.current_editor = atom.workspace.getActiveTextEditor()
 
-    if not current_editor
+    if not VimGlobals.current_editor
         return
 
-    uri = current_editor.getURI()
+    uri = VimGlobals.current_editor.getURI()
 
-    editor_views[uri] = atom.views.getView(current_editor)
+    editor_views[uri] = atom.views.getView(VimGlobals.current_editor)
 
     if not editor_views[uri]
         return
 
     neovim_send_message(['vim_eval',['&modified']], (mod) ->
-        mod = buf2str(mod)
+        mod = VimUtils.buf2str(mod)
 
         q = '.tab-bar .tab [data-path*="'
         q = q.concat(uri)
@@ -347,9 +230,9 @@ ns_redraw_win_end = () ->
 
     focused = editor_views[uri].classList.contains('is-focused')
 
-    if not updating and not internal_change
+    if not VimGlobals.updating and not VimGlobals.internal_change
         neovim_send_message(['vim_eval',["expand('%:p')"]], (filename) ->
-            filename = buf2str(filename)
+            filename = VimUtils.buf2str(filename)
             #console.log 'filename reported by vim:',filename
             #console.log 'current editor uri:',uri
 
@@ -386,27 +269,27 @@ vim_mode_save_file = () ->
 
 cursorPosChanged = (event) ->
 
-    if not internal_change
-        if editor_views[current_editor.getURI()].classList.contains('is-focused')
+    if not VimGlobals.internal_change
+        if editor_views[VimGlobals.current_editor.getURI()].classList.contains('is-focused')
             pos = event.newBufferPosition
             r = pos.row + 1
             c = pos.column + 1
-            sel = current_editor.getSelectedBufferRange()
+            sel = VimGlobals.current_editor.getSelectedBufferRange()
             #console.log 'sel:',sel
             neovim_send_message(['vim_command',['cal cursor('+r+','+c+')']],
                 (() ->
                     if not sel.isEmpty()
-                        current_editor.setSelectedBufferRange(sel,
+                        VimGlobals.current_editor.setSelectedBufferRange(sel,
                             sel.end.isLessThan(sel.start))
                 )
             )
 
 scrollTopChanged = () ->
-    if not internal_change
-        if editor_views[current_editor.getURI()].classList.contains('is-focused')
+    if not VimGlobals.internal_change
+        if editor_views[VimGlobals.current_editor.getURI()].classList.contains('is-focused')
             #console.log 'scrolled'
             if scrolltop
-                diff = scrolltop - current_editor.getScrollTop()
+                diff = scrolltop - VimGlobals.current_editor.getScrollTop()
                 if  diff > 0
                     #console.log 'scroll up:',diff
                     neovim_send_message(['vim_input',['<ScrollWheelUp>']])
@@ -415,7 +298,7 @@ scrollTopChanged = () ->
                     neovim_send_message(['vim_input',['<ScrollWheelDown>']])
         else
 
-            sels = current_editor.getSelectedBufferRanges()
+            sels = VimGlobals.current_editor.getSelectedBufferRanges()
             #console.log 'sels:',sels
             for sel in sels
                 r = sel.start.row + 1
@@ -424,12 +307,12 @@ scrollTopChanged = () ->
                 neovim_send_message(['vim_command',['cal cursor('+r+','+c+')']],
                     (() ->
                         if not sel.isEmpty()
-                            current_editor.setSelectedBufferRange(sel,
+                            VimGlobals.current_editor.setSelectedBufferRange(sel,
                                 sel.end.isLessThan(sel.start))
                     )
                 )
 
-    scrolltop = current_editor.getScrollTop()
+    scrolltop = VimGlobals.current_editor.getScrollTop()
 
 
 destroyPaneItem = (event) ->
@@ -440,7 +323,7 @@ destroyPaneItem = (event) ->
         neovim_send_message(['vim_eval',["expand('%:p')"]],
             ((filename) ->
 
-                filename = buf2str(filename)
+                filename = VimUtils.buf2str(filename)
                 console.log 'filename reported by vim:',filename
                 console.log 'current editor uri:',uri
                 ncefn =  VimUtils.normalize_filename(uri)
@@ -465,16 +348,16 @@ destroyPaneItem = (event) ->
 
 activePaneChanged = () =>
     if active_change
-        if updating
+        if VimGlobals.updating
             return
 
 
-        updating = true
-        internal_change = true
+        VimGlobals.updating = true
+        VimGlobals.internal_change = true
 
         try
-            current_editor = atom.workspace.getActiveTextEditor()
-            if current_editor
+            VimGlobals.current_editor = atom.workspace.getActiveTextEditor()
+            if VimGlobals.current_editor
                 filename = atom.workspace.getActiveTextEditor().getURI()
                 neovim_send_message(['vim_command',['e! '+ filename]],(x) =>
 
@@ -483,13 +366,13 @@ activePaneChanged = () =>
                     if cursorpositionchange_subscription
                         cursorpositionchange_subscription.dispose()
 
-                    current_editor = atom.workspace.getActiveTextEditor()
-                    if current_editor
+                    VimGlobals.current_editor = atom.workspace.getActiveTextEditor()
+                    if VimGlobals.current_editor
                         scrolltopchange_subscription =
-                            current_editor.onDidChangeScrollTop scrollTopChanged
+                            VimGlobals.current_editor.onDidChangeScrollTop scrollTopChanged
 
                         cursorpositionchange_subscription =
-                            current_editor.onDidChangeCursorPosition cursorPosChanged
+                            VimGlobals.current_editor.onDidChangeCursorPosition cursorPosChanged
 
                         if bufferchange_subscription
                             bufferchange_subscription.dispose()
@@ -500,22 +383,22 @@ activePaneChanged = () =>
                         register_change_handler()
 
                     scrolltop = undefined
-                    editor_views[current_editor.getURI()].vimState.tlnumber = 0
-                    editor_views[current_editor.getURI()].vimState.afterOpen()
+                    editor_views[VimGlobals.current_editor.getURI()].vimState.tlnumber = 0
+                    editor_views[VimGlobals.current_editor.getURI()].vimState.afterOpen()
                 )
         catch err
 
             console.log err
             console.log 'problem changing panes'
 
-        internal_change = false
-        updating = false
+        VimGlobals.internal_change = false
+        VimGlobals.updating = false
 
 
 class EventHandler
     constructor: (@vimState) ->
-        qtop = current_editor.getScrollTop()
-        qbottom = current_editor.getScrollBottom()
+        qtop = VimGlobals.current_editor.getScrollTop()
+        qbottom = VimGlobals.current_editor.getScrollBottom()
 
         @rows = Math.floor((qbottom - qtop)/lineSpacing()+1)
         #console.log 'rows:', @rows
@@ -529,10 +412,10 @@ class EventHandler
     handleEvent: (event, q) =>
         if q.length is 0
             return
-        if updating
+        if VimGlobals.updating
             return
 
-        internal_change = true
+        VimGlobals.internal_change = true
         dirty = (false for i in [0..@rows-2])
 
         if event is "redraw"
@@ -540,7 +423,7 @@ class EventHandler
             for x in q
                 if not x
                     continue
-                x[0] = buf2str(x[0])
+                x[0] = VimUtils.buf2str(x[0])
                 if x[0] is "cursor_goto"
                     for v in x[1..]
                         try
@@ -649,7 +532,7 @@ class EventHandler
                     #console.log 'put:',x[1..]
                     for v in x[1..]
                         try
-                            v[0] = buf2str(v[0])
+                            v[0] = VimUtils.buf2str(v[0])
                             ly = @vimState.location[0]
                             lx = @vimState.location[1]
                             if 0<=ly and ly < @rows-1
@@ -701,13 +584,13 @@ class EventHandler
             )
 
         options =  { normalizeLineEndings: true, undo: 'skip' }
-        if current_editor
-            current_editor.buffer.setTextInRange(new Range(
-                new Point(current_editor.buffer.getLastRow(),0),
-                new Point(current_editor.buffer.getLastRow(),96)),'',
+        if VimGlobals.current_editor
+            VimGlobals.current_editor.buffer.setTextInRange(new Range(
+                new Point(VimGlobals.current_editor.buffer.getLastRow(),0),
+                new Point(VimGlobals.current_editor.buffer.getLastRow(),96)),'',
                 options)
 
-        internal_change = false
+        VimGlobals.internal_change = false
 
 module.exports =
 class VimState
@@ -726,8 +609,8 @@ class VimState
         @location = []
 
 
-        if not current_editor
-            current_editor = @editor
+        if not VimGlobals.current_editor
+            VimGlobals.current_editor = @editor
         @changeModeClass('command-mode')
         @activateCommandMode()
 
@@ -854,7 +737,7 @@ class VimState
             screen_f.push line
 
     redraw_screen:(rows, dirty) =>
-        if current_editor
+        if VimGlobals.current_editor
             @postprocess(rows, dirty)
             tlnumberarr = []
             for posi in [0..rows-1]
@@ -890,7 +773,7 @@ class VimState
                             qq = qq[initial..].join('')
                             linerange = new Range(new Point(@tlnumber+posi,0),
                                                     new Point(@tlnumber + posi, 96))
-                            current_editor.buffer.setTextInRange(linerange,
+                            VimGlobals.current_editor.buffer.setTextInRange(linerange,
                                 qq, options)
                             dirty[posi] = false
 
@@ -899,15 +782,15 @@ class VimState
 
             if @cursor_visible and @location[0] <= rows - 2
                 if not DEBUG
-                    current_editor.setCursorBufferPosition(
+                    VimGlobals.current_editor.setCursorBufferPosition(
                         new Point(@tlnumber + @location[0],
                         @location[1]-4),{autoscroll:true})
                 else
-                    current_editor.setCursorBufferPosition(
+                    VimGlobals.current_editor.setCursorBufferPosition(
                         new Point(@tlnumber + @location[0],
                         @location[1]),{autoscroll:true})
 
-            current_editor.setScrollTop(lineSpacing()*@tlnumber)
+            VimGlobals.current_editor.setScrollTop(lineSpacing()*@tlnumber)
 
     neovim_subscribe: =>
         #console.log 'neovim_subscribe'
@@ -917,7 +800,7 @@ class VimState
         message = ['ui_attach',[eventHandler.cols,eventHandler.rows,true]]
         neovim_send_message(message)
 
-        session.on('notification', eventHandler.handleEvent)
+        VimGlobals.session.on('notification', eventHandler.handleEvent)
         #rows = @editor.getScreenLineCount()
         @location = [0,0]
         @status_bar = (' ' for ux in [1..eventHandler.cols])
@@ -947,8 +830,8 @@ class VimState
         @updateStatusBar()
 
     changeModeClass: (targetMode) ->
-        if current_editor
-            editorview = editor_views[current_editor.getURI()]
+        if VimGlobals.current_editor
+            editorview = editor_views[VimGlobals.current_editor.getURI()]
             if editorview
                 for mode in ['command-mode', 'insert-mode', 'visual-mode',
                             'operator-pending-mode', 'invisible-mode']

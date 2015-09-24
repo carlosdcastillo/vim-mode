@@ -23,3 +23,13 @@ module.exports =
         result
         
 
+    buf2str: (buffer) ->
+        if not buffer
+            return ''
+        res = ''
+        i = 0
+        while i < buffer.length
+            res = res + String.fromCharCode(buffer[i])
+            i++
+        res
+
