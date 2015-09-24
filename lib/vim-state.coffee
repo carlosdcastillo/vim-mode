@@ -30,6 +30,9 @@ bufferchange_subscription = undefined
 bufferchangeend_subscription = undefined
 cursorpositionchange_subscription = undefined
 
+buffer_change_subscription = undefined
+buffer_destroy_subscription = undefined
+
 scrolltop = undefined
 internal_change = false
 updating = false
@@ -253,7 +256,7 @@ real_update = () ->
                 neovim_set_text(item.text, item.start, item.end, item.delta)
             
 #This code registers the change handler. The undo fix is a workaround
-#a bug I was not able to detect that coupled an extra state when
+#a bug I was not able to detect what coupled an extra state when
 #I did Cmd-X and then pressed u. Challenge: give me the set of reasons that
 #trigger such situation in the code.
 
@@ -383,7 +386,7 @@ ns_redraw_win_end = () ->
             if ncefn and nfn and nfn isnt ncefn
                 #console.log '-------------------------------',nfn
                 #console.log '*******************************',ncefn
-                atom.workspace.open(filename)
+                #atom.workspace.open(filename)
                 
             else
 
@@ -454,6 +457,78 @@ scrollTopChanged = () ->
                 )
 
     scrolltop = current_editor.getScrollTop()
+
+destroyPaneItem = (event) ->
+    console.log 'destroying pane, will send command',event.item
+                
+    console.log 'a:',atom.workspace.getActiveTextEditor().getURI(), 'b:', event.item.getURI()
+    if atom.workspace.getActiveTextEditor().getURI() is event.item.getURI()
+        uri =event.item.getURI()
+        neovim_send_message(['vim_eval',["expand('%:p')"]], 
+            ((filename) ->
+
+                filename = buf2str(filename)
+                console.log 'filename reported by vim:',filename
+                console.log 'current editor uri:',uri
+                ncefn =  normalize_filename(uri)
+                nfn = normalize_filename(filename)
+
+                if ncefn and nfn and nfn isnt ncefn
+                    #console.log '-------------------------------',nfn
+                    #console.log '*******************************',ncefn
+                    
+                else
+                    neovim_send_message(['vim_command',['bd!']])
+                )
+
+        )
+    console.log 'destoyed pane'
+
+activePaneChanged = () =>
+    if active_change
+        if updating
+            return
+
+
+        internal_change = true
+
+        try
+            current_editor = atom.workspace.getActiveTextEditor()
+            if current_editor
+                filename = atom.workspace.getActiveTextEditor().getURI()
+                neovim_send_message(['vim_command',['e '+ filename]],(x) =>
+
+                    if scrolltopchange_subscription
+                        scrolltopchange_subscription.dispose()
+                    if cursorpositionchange_subscription
+                        cursorpositionchange_subscription.dispose()
+
+                    current_editor = atom.workspace.getActiveTextEditor()
+                    if current_editor
+                        scrolltopchange_subscription =
+                            current_editor.onDidChangeScrollTop scrollTopChanged
+    
+                        cursorpositionchange_subscription = 
+                            current_editor.onDidChangeCursorPosition cursorPosChanged
+
+                        if bufferchange_subscription
+                            bufferchange_subscription.dispose()
+
+                        if bufferchangeend_subscription
+                            bufferchangeend_subscription.dispose()
+
+                        register_change_handler()
+    
+                    scrolltop = undefined
+                    editor_views[current_editor.getURI()].vimState.tlnumber = 0
+                    editor_views[current_editor.getURI()].vimState.afterOpen()
+                )
+        catch err
+
+            console.log err
+            console.log 'problem changing panes'
+
+        internal_change = false
 
 
 class EventHandler
@@ -653,7 +728,6 @@ class EventHandler
 
         internal_change = false
 
-
 module.exports =
 class VimState
     editor: null
@@ -670,6 +744,7 @@ class VimState
         @status_bar = []
         @location = []
     
+
         if not current_editor
             current_editor = @editor
         @changeModeClass('command-mode')
@@ -682,7 +757,13 @@ class VimState
                 priority:10 )
         )
 
-        atom.workspace.onDidChangeActivePaneItem @activePaneChanged
+        if not buffer_change_subscription
+            buffer_change_subscription = 
+                atom.workspace.onDidChangeActivePaneItem activePaneChanged
+        if not buffer_destroy_subscription
+            buffer_destroy_subscription = 
+                atom.workspace.onWillDestroyPaneItem destroyPaneItem
+
         atom.commands.add 'atom-text-editor', 'core:save', (e) ->
             e.preventDefault()
             e.stopPropagation()
@@ -744,53 +825,6 @@ class VimState
                 #subscriptions['redraw'] = false
     
                 console.log 'unsubscribing'
-  
-    activePaneChanged: =>
-        if active_change
-            if updating
-                return
-
-
-            internal_change = true
-
-            try
-
-                current_editor = atom.workspace.getActiveTextEditor()
-                if current_editor
-                    filename = atom.workspace.getActiveTextEditor().getURI()
-                    neovim_send_message(['vim_command',['e '+ filename]],(x) =>
-
-                        if scrolltopchange_subscription
-                            scrolltopchange_subscription.dispose()
-                        if cursorpositionchange_subscription
-                            cursorpositionchange_subscription.dispose()
-        
-                        current_editor = atom.workspace.getActiveTextEditor()
-                        if current_editor
-                            scrolltopchange_subscription =
-                                current_editor.onDidChangeScrollTop scrollTopChanged
-        
-                            cursorpositionchange_subscription = 
-                                current_editor.onDidChangeCursorPosition cursorPosChanged
-
-                            if bufferchange_subscription
-                               bufferchange_subscription.dispose()
-
-                            if bufferchangeend_subscription
-                               bufferchangeend_subscription.dispose()
-
-                            register_change_handler()
-        
-                        scrolltop = undefined
-                        @tlnumber = 0
-                        @afterOpen()
-                    )
-            catch err
-    
-                console.log err
-                console.log 'problem changing panes'
-    
-            internal_change = false
   
     afterOpen: =>
         #console.log 'in after open'
