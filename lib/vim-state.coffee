@@ -205,8 +205,8 @@ send_data = (buf, l, delta, i, r, c) ->
             lines = []
             l2 = []
             for item in l
-                item2 = item.split('"').join('\\"')
                 item2 = item.split('\\').join('\\\\')
+                item2 = item2.split('"').join('\\"')
                 l2.push '"'+item2+'"'
 
             lines.push('cal setline(1, ['+l2.join()+'])')
