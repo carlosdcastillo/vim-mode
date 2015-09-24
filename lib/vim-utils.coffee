@@ -2,7 +2,7 @@
 
 module.exports =
     
-    normalize_filename: ->
+    normalize_filename: (filename) ->
         if filename
             filename = filename.split('\\').join('/')
         return filename
