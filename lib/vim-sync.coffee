@@ -119,6 +119,7 @@ module.exports =
             VimGlobals.updating = true
 
             curr_updates = VimGlobals.lupdates.slice(0)
+
             VimGlobals.lupdates = []
             if curr_updates.length > 0
 

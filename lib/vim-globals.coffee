@@ -10,6 +10,9 @@ unless root.session
 unless root.current_editor
     root.current_editor = undefined
 
+unless root.tlnumber
+    root.tlnumber = 0
+
 unless root.internal_change
     internal_change = false
 

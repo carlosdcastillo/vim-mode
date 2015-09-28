@@ -7,6 +7,7 @@ os = require 'os'
 util = require 'util'
 
 Session = require 'msgpack5rpc'
+
 VimUtils = require './vim-utils'
 VimGlobals = require './vim-globals'
 VimSync = require './vim-sync'
@@ -120,25 +121,44 @@ register_change_handler = () ->
 
         if not VimGlobals.internal_change and not VimGlobals.updating
 
-            q = VimGlobals.current_editor.getText()
-            text_list = q.split('\n')
+            last_text = VimGlobals.current_editor.getText()
+            text_list = last_text.split('\n')
             undo_fix =
                 not (change.start is 0 and change.end is text_list.length-1 \
                         and change.bufferDelta is 0)
-            if undo_fix
+
+
+            tln = VimGlobals.tlnumber
+
+            qtop = VimGlobals.current_editor.getScrollTop()
+            qbottom = VimGlobals.current_editor.getScrollBottom()
+
+            rows = Math.floor((qbottom - qtop)/lineSpacing()+1)
+            valid_loc = not (change.bufferDelta is 0 and \
+                    change.end-change.start > rows-3)  and (change.start >= tln and \
+                change.start < tln+rows-3)
+ 
+
+            if undo_fix and valid_loc
+                console.log 'change:',change
+                console.log 'tln:',tln,'start:',change.start, 'rows:',rows
                 console.log '(uri:',VimGlobals.current_editor.getURI(),'start:',change.start
                 console.log 'end:',change.end,'delta:',change.bufferDelta,')'
 
-                VimGlobals.lupdates.push({uri: VimGlobals.current_editor.getURI(), text: q, start: change.start, \
-                    end: change.end, delta: change.bufferDelta})
+                VimGlobals.lupdates.push({uri: VimGlobals.current_editor.getURI(), \
+                        text: last_text, start: change.start, end: change.end, \
+                        delta: change.bufferDelta})
 
                 VimSync.real_update()
+        
+        #last_text = VimGlobals.current_editor.getText()
     )
 
     #bufferchangeend_subscription = VimGlobals.current_editor.onDidStopChanging ( ()  ->
         #if not VimGlobals.internal_change and not VimGlobals.updating
             #sync_lines()
     #)
+
 
 #This code is called indirectly by timer and it's sole purpose is to sync the
 # number of lines from Neovim -> Atom.
@@ -383,7 +403,8 @@ activePaneChanged = () =>
                         register_change_handler()
 
                     scrolltop = undefined
-                    editor_views[VimGlobals.current_editor.getURI()].vimState.tlnumber = 0
+                    tlnumber = 0
+
                     editor_views[VimGlobals.current_editor.getURI()].vimState.afterOpen()
                 )
         catch err
@@ -580,17 +601,26 @@ class EventHandler
             neovim_send_message(['vim_command',['redraw!']],
                 (() ->
                     scrolled = false
+                    options =  { normalizeLineEndings: true, undo: 'skip' }
+                    if VimGlobals.current_editor
+                        VimGlobals.current_editor.buffer.setTextInRange(new Range(
+                            new Point(VimGlobals.current_editor.buffer.getLastRow(),0),
+                            new Point(VimGlobals.current_editor.buffer.getLastRow(),96)),'',
+                            options)
+
+                    VimGlobals.internal_change = false
                 )
             )
+        else
 
-        options =  { normalizeLineEndings: true, undo: 'skip' }
-        if VimGlobals.current_editor
-            VimGlobals.current_editor.buffer.setTextInRange(new Range(
-                new Point(VimGlobals.current_editor.buffer.getLastRow(),0),
-                new Point(VimGlobals.current_editor.buffer.getLastRow(),96)),'',
-                options)
+            options =  { normalizeLineEndings: true, undo: 'skip' }
+            if VimGlobals.current_editor
+                VimGlobals.current_editor.buffer.setTextInRange(new Range(
+                    new Point(VimGlobals.current_editor.buffer.getLastRow(),0),
+                    new Point(VimGlobals.current_editor.buffer.getLastRow(),96)),'',
+                    options)
 
-        VimGlobals.internal_change = false
+            VimGlobals.internal_change = false
 
 module.exports =
 class VimState
@@ -604,7 +634,7 @@ class VimState
         @mode = 'command'
         @cursor_visible = true
         @scrolled_down = false
-        @tlnumber = 0
+        VimGlobals.tlnumber = 0
         @status_bar = []
         @location = []
 
@@ -720,6 +750,8 @@ class VimState
             #console.log 'NOT SUBSCRIBING, problem'
             #
 
+        #last_text = VimGlobals.current_editor.getText()
+
     postprocess: (rows, dirty) ->
         screen_f = []
         for posi in [0..rows-1]
@@ -751,11 +783,11 @@ class VimState
                     tlnumberarr.push -1
 
             if scrolled and @scrolled_down
-                @tlnumber = tlnumberarr[tlnumberarr.length-2]
+                VimGlobals.tlnumber = tlnumberarr[tlnumberarr.length-2]
             else if scrolled and not @scrolled_down
-                @tlnumber = tlnumberarr[0]
+                VimGlobals.tlnumber = tlnumberarr[0]
             else
-                @tlnumber = tlnumberarr[0]
+                VimGlobals.tlnumber = tlnumberarr[0]
 
             if dirty
 
@@ -768,11 +800,11 @@ class VimState
 
                 for posi in [0..rows-2]
                     if not (tlnumberarr[posi] is -1)
-                        if (tlnumberarr[posi] + posi == @tlnumber + posi) and dirty[posi]
+                        if (tlnumberarr[posi] + posi == VimGlobals.tlnumber + posi) and dirty[posi]
                             qq = screen_f[posi]
                             qq = qq[initial..].join('')
-                            linerange = new Range(new Point(@tlnumber+posi,0),
-                                                    new Point(@tlnumber + posi, 96))
+                            linerange = new Range(new Point(VimGlobals.tlnumber+posi,0),
+                                                    new Point(VimGlobals.tlnumber + posi, 96))
                             VimGlobals.current_editor.buffer.setTextInRange(linerange,
                                 qq, options)
                             dirty[posi] = false
@@ -783,14 +815,14 @@ class VimState
             if @cursor_visible and @location[0] <= rows - 2
                 if not DEBUG
                     VimGlobals.current_editor.setCursorBufferPosition(
-                        new Point(@tlnumber + @location[0],
+                        new Point(VimGlobals.tlnumber + @location[0],
                         @location[1]-4),{autoscroll:true})
                 else
                     VimGlobals.current_editor.setCursorBufferPosition(
-                        new Point(@tlnumber + @location[0],
+                        new Point(VimGlobals.tlnumber + @location[0],
                         @location[1]),{autoscroll:true})
 
-            VimGlobals.current_editor.setScrollTop(lineSpacing()*@tlnumber)
+            VimGlobals.current_editor.setScrollTop(lineSpacing()*VimGlobals.tlnumber)
 
     neovim_subscribe: =>
         #console.log 'neovim_subscribe'
@@ -808,17 +840,13 @@ class VimState
 
         subscriptions['redraw'] = true
 
-    # Private: Used to enable command mode.
-    #
-    # Returns nothing.
+    #Used to enable command mode.
     activateCommandMode: ->
         @mode = 'command'
         @changeModeClass('command-mode')
         @updateStatusBar()
 
-    # Private: Used to enable insert mode.
-    #
-    # Returns nothing.
+    #Used to enable insert mode.
     activateInsertMode: (transactionStarted = false)->
         @mode = 'insert'
         @changeModeClass('insert-mode')
