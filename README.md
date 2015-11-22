@@ -5,8 +5,9 @@ by connecting to Neovim.
 
 # What's new?
 
-I've update everything to work with Neovim 0.0.1 (it should also work with the
-version in master of [Neovim](http://github.com/neovim/neovim))
+I've update everything to work with Neovim 0.1.0 (it should also work with the
+version in master of [Neovim](http://github.com/neovim/neovim)). The version
+I'm currenty using: [download](https://github.com/neovim/neovim/archive/v0.1.0.tar.gz).
 
 On the [Atom](https://atom.io/) side I've tested it with version 0.207 and
 I am currently using version 1.2.3. In versions 0.206 and later you will need to
