@@ -5,14 +5,14 @@ by connecting to Neovim.
 
 # What's new?
 
-I've update everything to work with the version in master of
-[Neovim](http://github.com/neovim/neovim)
+I've update everything to work with Neovim 0.0.1 (it should also work with the
+version in master of [Neovim](http://github.com/neovim/neovim))
 
-On the [Atom](https://atom.io/) side I've tested it with version 0.175 and
-0.184 and seems to work fine. I am currently using version 0.207. In versions
-0.206 and later you will need to change the name of the directory vim-mode to
-something else (I use the name nvim-mode). If you don't Atom confuses this
-plugin with the one developed by GitHub.
+On the [Atom](https://atom.io/) side I've tested it with version 0.207 and
+I am currently using version 1.2.3. In versions 0.206 and later you will need to
+change the name of the directory vim-mode to something else (I use the name
+nvim-mode). If you don't Atom confuses this plugin with the one developed by
+GitHub.
 
 It should be usable enough that if you are adventurous you will be able to get
 day-to-day work done. There are, however, plenty of features missing, so you
