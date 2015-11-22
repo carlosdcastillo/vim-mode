@@ -38,7 +38,8 @@ neovim_set_text = (text, start, end, delta) ->
                         ((vim_lines_r) ->
                             vim_lines = []
                             for item in vim_lines_r
-                                vim_lines.push VimUtils.buf2str(item)
+                                vim_lines.push item
+                                #vim_lines.push VimUtils.buf2str(item)
                             #console.log 'vim_lines', vim_lines
                             #console.log 'lines',lines
                             l = []
