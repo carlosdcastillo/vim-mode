@@ -79,14 +79,13 @@ http://www.youtube.com/watch?v=lH_zb7X6mZw
 
 # Things TO DO
 
-* Fix hiccups when editing a new file (a new tab with title undefined is
-created)
-* Make the geometry of the Atom buffer fully match the geometry of the Neovim
-buffer.
 * Handle files of more than 9999 lines.
 * Handle (or handle better) Atom initiated cursor position changes.
 * Make one of the following UI connections/integrations: visual selection,
 highlight search, auto completion, etc.
+* Better handle editing of new files
+* Make the geometry of the Atom buffer fully match the geometry of the Neovim
+buffer.
 
 # Contributing
 

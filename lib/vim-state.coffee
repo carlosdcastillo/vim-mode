@@ -28,6 +28,7 @@ screen_f = []
 scrolled = false
 editor_views = {}
 active_change = true
+next_new_file_id = 0
 
 scrolltopchange_subscription = undefined
 bufferchange_subscription = undefined
@@ -123,35 +124,38 @@ register_change_handler = () ->
 
         if not VimGlobals.internal_change and not VimGlobals.updating
 
-            last_text = VimGlobals.current_editor.getText()
-            text_list = last_text.split('\n')
-            undo_fix =
-                not (change.start is 0 and change.end is text_list.length-1 \
-                        and change.bufferDelta is 0)
+            try
+                last_text = VimGlobals.current_editor.getText()
+                text_list = last_text.split('\n')
+                undo_fix =
+                    not (change.start is 0 and change.end is text_list.length-1 \
+                            and change.bufferDelta is 0)
 
 
-            tln = VimGlobals.tlnumber
+                tln = VimGlobals.tlnumber
 
-            qtop = VimGlobals.current_editor.getScrollTop()
-            qbottom = VimGlobals.current_editor.getScrollBottom()
+                qtop = VimGlobals.current_editor.getScrollTop()
+                qbottom = VimGlobals.current_editor.getScrollBottom()
 
-            rows = Math.floor((qbottom - qtop)/lineSpacing()+1)
-            valid_loc = not (change.bufferDelta is 0 and \
-                    change.end-change.start >= rows-3)  and (change.start >= tln and \
-                change.start < tln+rows-3)
- 
+                rows = Math.floor((qbottom - qtop)/lineSpacing()+1)
+                valid_loc = not (change.bufferDelta is 0 and \
+                        change.end-change.start >= rows-3)  and (change.start >= tln and \
+                    change.start < tln+rows-3)
+    
 
-            if undo_fix and valid_loc
-                console.log 'change:',change
-                console.log 'tln:',tln,'start:',change.start, 'rows:',rows
-                console.log '(uri:',VimGlobals.current_editor.getURI(),'start:',change.start
-                console.log 'end:',change.end,'delta:',change.bufferDelta,')'
+                if undo_fix and valid_loc
+                    console.log 'change:',change
+                    console.log 'tln:',tln,'start:',change.start, 'rows:',rows
+                    console.log '(uri:',VimGlobals.current_editor.getURI(),'start:',change.start
+                    console.log 'end:',change.end,'delta:',change.bufferDelta,')'
 
-                VimGlobals.lupdates.push({uri: VimGlobals.current_editor.getURI(), \
-                        text: last_text, start: change.start, end: change.end, \
-                        delta: change.bufferDelta})
+                    VimGlobals.lupdates.push({uri: VimGlobals.current_editor.getURI(), \
+                            text: last_text, start: change.start, end: change.end, \
+                            delta: change.bufferDelta})
 
-                VimSync.real_update()
+                    VimSync.real_update()
+            catch err
+                console.log 'err: probably not a text editor window changed'
         
         #last_text = VimGlobals.current_editor.getText()
     )
@@ -222,6 +226,13 @@ ns_redraw_win_end = () ->
 
     uri = VimGlobals.current_editor.getURI()
 
+
+    if not uri
+        uri = 'newfile'+next_new_file_id
+        next_new_file_id = next_new_file_id + 1
+
+    console.log 'URI:',uri
+
     editor_views[uri] = atom.views.getView(VimGlobals.current_editor)
 
     if not editor_views[uri]
@@ -254,11 +265,13 @@ ns_redraw_win_end = () ->
 
     if not VimGlobals.updating and not VimGlobals.internal_change
         neovim_send_message(['vim_eval',["expand('%:p')"]], (filename) ->
-            console.log 'orig filename reported by vim:',filename
-            #filename = VimUtils.buf2str(filename)
-            #console.log 'filename reported by vim:',filename
-            #console.log 'current editor uri:',uri
 
+            filename = filename.replace /^\s+|\s+$/g, ""
+            if filename is ''
+                filename = 'newfile'+next_new_file_id
+                next_new_file_id = next_new_file_id + 1
+
+            console.log 'orig filename reported by vim:',filename
             ncefn =  VimUtils.normalize_filename(uri)
             nfn = VimUtils.normalize_filename(filename)
 
@@ -268,8 +281,9 @@ ns_redraw_win_end = () ->
                 atom.workspace.open(filename)
 
             else
+                if filename and uri
 
-                sync_lines()
+                    sync_lines()
         )
 
     active_change = false
@@ -278,6 +292,8 @@ ns_redraw_win_end = () ->
         if turi
             if turi[turi.length-1] is '~'
                 texteditor.destroy()
+        if not turi
+            texteditor.destroy()
 
     active_change = true
 
@@ -314,14 +330,14 @@ scrollTopChanged = () ->
 
         if editor_views[VimGlobals.current_editor.getURI()].classList.contains('is-focused')
             #console.log 'scrolled'
-            if scrolltop
-                diff = scrolltop - VimGlobals.current_editor.getScrollTop()
-                if  diff > 0
-                    #console.log 'scroll up:',diff
-                    neovim_send_message(['vim_input',['<ScrollWheelUp>']])
-                else
-                    #console.log 'scroll down:',diff
-                    neovim_send_message(['vim_input',['<ScrollWheelDown>']])
+            #if scrolltop
+                #diff = scrolltop - VimGlobals.current_editor.getScrollTop()
+                #if  diff > 0
+                    ##console.log 'scroll up:',diff
+                    #neovim_send_message(['vim_input',['<ScrollWheelUp>']])
+                #else
+                    ##console.log 'scroll down:',diff
+                    #neovim_send_message(['vim_input',['<ScrollWheelDown>']])
         else
 
             sels = VimGlobals.current_editor.getSelectedBufferRanges()
@@ -385,7 +401,13 @@ activePaneChanged = () =>
             VimGlobals.current_editor = atom.workspace.getActiveTextEditor()
             if VimGlobals.current_editor
                 filename = atom.workspace.getActiveTextEditor().getURI()
-                neovim_send_message(['vim_command',['e! '+ filename]],(x) =>
+                if filename
+                    cmd = 'e! '+ filename
+                else
+                    cmd = 'e! newfile'+next_new_file_id
+                    next_new_file_id = next_new_file_id + 1
+
+                neovim_send_message(['vim_command',[cmd]],(x) =>
 
                     if scrolltopchange_subscription
                         scrolltopchange_subscription.dispose()
@@ -738,7 +760,9 @@ class VimState
         neovim_send_message(['vim_command',['set smartindent']])
         neovim_send_message(['vim_command',['set hlsearch']])
         neovim_send_message(['vim_command',['set tabstop=4']])
+        neovim_send_message(['vim_command',['set encoding=utf-8']])
         neovim_send_message(['vim_command',['set shiftwidth=4']])
+        neovim_send_message(['vim_command',['set shortmess+=I']])
         neovim_send_message(['vim_command',['set expandtab']])
         neovim_send_message(['vim_command',['set hidden']])
         neovim_send_message(['vim_command',['set listchars=eol:$']])
@@ -747,6 +771,8 @@ class VimState
         neovim_send_message(['vim_command',['set showcmd']])
         neovim_send_message(['vim_command',['set incsearch']])
         neovim_send_message(['vim_command',['set autoread']])
+        neovim_send_message(['vim_command',['set laststatus=1']])
+
         neovim_send_message(['vim_command',
             ['set backspace=indent,eol,start']])
 
@@ -827,7 +853,7 @@ class VimState
                         new Point(VimGlobals.tlnumber + @location[0],
                         @location[1]),{autoscroll:true})
 
-            #VimGlobals.current_editor.setScrollTop(lineSpacing()*VimGlobals.tlnumber)
+            VimGlobals.current_editor.setScrollTop(lineSpacing()*VimGlobals.tlnumber)
 
     neovim_subscribe: =>
         #console.log 'neovim_subscribe'
