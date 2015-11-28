@@ -126,7 +126,11 @@ register_change_handler = () ->
 
             try
                 last_text = VimGlobals.current_editor.getText()
-                text_list = last_text.split('\n')
+                text_list_tmp = last_text.split('\n')
+                text_list = []
+                for item in text_list_tmp
+                    test_list.push item.split('\r').join('')
+
                 undo_fix =
                     not (change.start is 0 and change.end is text_list.length-1 \
                             and change.bufferDelta is 0)
@@ -183,7 +187,7 @@ sync_lines = () ->
                 diff = ''
                 for i in [0..nl-1]
                     diff = diff + '\n'
-                append_options = {normalizeLineEndings: true}
+                append_options = {normalizeLineEndings: false}
                 VimGlobals.current_editor.buffer.append(diff, append_options)
 
                 neovim_send_message(['vim_command',['redraw!']],
@@ -629,7 +633,7 @@ class EventHandler
             neovim_send_message(['vim_command',['redraw!']],
                 (() ->
                     scrolled = false
-                    options =  { normalizeLineEndings: true, undo: 'skip' }
+                    options =  { normalizeLineEndings: false, undo: 'skip' }
                     if VimGlobals.current_editor
                         VimGlobals.current_editor.buffer.setTextInRange(new Range(
                             new Point(VimGlobals.current_editor.buffer.getLastRow(),0),
@@ -641,7 +645,7 @@ class EventHandler
             )
         else
 
-            options =  { normalizeLineEndings: true, undo: 'skip' }
+            options =  { normalizeLineEndings: false, undo: 'skip' }
             if VimGlobals.current_editor
                 VimGlobals.current_editor.buffer.setTextInRange(new Range(
                     new Point(VimGlobals.current_editor.buffer.getLastRow(),0),
@@ -819,7 +823,7 @@ class VimState
 
             if dirty
 
-                options =  { normalizeLineEndings: true, undo: 'skip' }
+                options =  { normalizeLineEndings: false, undo: 'skip' }
 
                 if DEBUG
                     initial = 0

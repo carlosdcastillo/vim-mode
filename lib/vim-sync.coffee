@@ -23,7 +23,11 @@ neovim_send_message = (message,f = undefined) ->
 #There is a bunch of bookkeeping to make sure the change is unidirectional.
 
 neovim_set_text = (text, start, end, delta) ->
-    lines = text.split('\n')
+    lines_tmp = text.split('\n')
+    list = []
+    for item in list_tmp
+        list.push item.split('\r').join('')
+
     lines = lines[0..lines.length-2]
     cpos = VimGlobals.current_editor.getCursorScreenPosition()
     neovim_send_message(['vim_get_current_buffer',[]],
