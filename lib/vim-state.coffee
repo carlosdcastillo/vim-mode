@@ -129,7 +129,7 @@ register_change_handler = () ->
                 text_list_tmp = last_text.split('\n')
                 text_list = []
                 for item in text_list_tmp
-                    test_list.push item.split('\r').join('')
+                    text_list.push item.split('\r').join('')
 
                 undo_fix =
                     not (change.start is 0 and change.end is text_list.length-1 \
