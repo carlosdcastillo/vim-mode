@@ -24,9 +24,9 @@ neovim_send_message = (message,f = undefined) ->
 
 neovim_set_text = (text, start, end, delta) ->
     lines_tmp = text.split('\n')
-    list = []
+    lines = []
     for item in list_tmp
-        list.push item.split('\r').join('')
+        lines.push item.split('\r').join('')
 
     lines = lines[0..lines.length-2]
     cpos = VimGlobals.current_editor.getCursorScreenPosition()
