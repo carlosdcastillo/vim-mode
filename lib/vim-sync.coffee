@@ -25,7 +25,7 @@ neovim_send_message = (message,f = undefined) ->
 neovim_set_text = (text, start, end, delta) ->
     lines_tmp = text.split('\n')
     lines = []
-    for item in list_tmp
+    for item in lines_tmp
         lines.push item.split('\r').join('')
 
     lines = lines[0..lines.length-2]
