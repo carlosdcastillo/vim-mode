@@ -135,20 +135,27 @@ register_change_handler = () ->
                     not (change.start is 0 and change.end is text_list.length-1 \
                             and change.bufferDelta is 0)
 
+                #undo_fix = true
 
-                tln = VimGlobals.tlnumber
-
+    
                 qtop = VimGlobals.current_editor.getScrollTop()
                 qbottom = VimGlobals.current_editor.getScrollBottom()
 
-                rows = Math.floor((qbottom - qtop)/lineSpacing()+1)
+                tln = Math.floor((qtop)/lineSpacing()+1)
+                bot = Math.floor((qbottom )/lineSpacing()+1)
+                bot2 = VimGlobals.current_editor.getLineCount()
+                if bot2 < bot
+                    bot = bot2
+
+                rows = bot - tln
                 #valid_loc = not (change.bufferDelta is 0 and \
                         #change.end-change.start >= rows-3)  and (change.start >= tln and \
                     #change.start < tln+rows-3)
     
-                valid_loc = not ( change.end-change.start >= rows-3)  and (change.start >= tln and \
-                    change.start < tln+rows-3)
+                valid_loc =  not (change.bufferDelta is 0 and \
+                        change.end-change.start >= rows) and (change.start >= tln and  change.start < bot)
 
+                console.log 'try tln:',tln,'start:',change.start, 'bot:',bot
                 if undo_fix and valid_loc
                     console.log 'change:',change
                     console.log 'tln:',tln,'start:',change.start, 'rows:',rows
@@ -160,10 +167,15 @@ register_change_handler = () ->
                             delta: change.bufferDelta})
 
                     VimSync.real_update()
+
             catch err
+                console.log err
                 console.log 'err: probably not a text editor window changed'
+
         
         #last_text = VimGlobals.current_editor.getText()
+        #
+
     )
 
     #bufferchangeend_subscription = VimGlobals.current_editor.onDidStopChanging ( ()  ->
@@ -237,7 +249,7 @@ ns_redraw_win_end = () ->
         uri = 'newfile'+next_new_file_id
         next_new_file_id = next_new_file_id + 1
 
-    console.log 'URI:',uri
+    #console.log 'URI:',uri
 
     editor_views[uri] = atom.views.getView(VimGlobals.current_editor)
 
@@ -277,7 +289,7 @@ ns_redraw_win_end = () ->
                 filename = 'newfile'+next_new_file_id
                 next_new_file_id = next_new_file_id + 1
 
-            console.log 'orig filename reported by vim:',filename
+            #console.log 'orig filename reported by vim:',filename
             ncefn =  VimUtils.normalize_filename(uri)
             nfn = VimUtils.normalize_filename(filename)
 
@@ -809,6 +821,7 @@ class VimState
 
     redraw_screen:(rows, dirty) =>
         if VimGlobals.current_editor
+            sbr = VimGlobals.current_editor.getSelectedBufferRange()
             @postprocess(rows, dirty)
             tlnumberarr = []
             for posi in [0..rows-1]
@@ -856,13 +869,16 @@ class VimState
                 if not DEBUG
                     VimGlobals.current_editor.setCursorBufferPosition(
                         new Point(VimGlobals.tlnumber + @location[0],
-                        @location[1]-initial),{autoscroll:true})
+                        @location[1]-initial),{autoscroll:false})
                 else
                     VimGlobals.current_editor.setCursorBufferPosition(
                         new Point(VimGlobals.tlnumber + @location[0],
-                        @location[1]),{autoscroll:true})
+                        @location[1]),{autoscroll:false})
 
             VimGlobals.current_editor.setScrollTop(lineSpacing()*VimGlobals.tlnumber)
+
+            if not sbr.isEmpty()
+                VimGlobals.current_editor.setSelectedBufferRange(sbr)
 
     neovim_subscribe: =>
         #console.log 'neovim_subscribe'
