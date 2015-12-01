@@ -19,7 +19,7 @@ else
 
 DEBUG = false
 
-COLS = 140
+COLS = 180
 
 subscriptions = {}
 subscriptions['redraw'] = false
@@ -142,10 +142,12 @@ register_change_handler = () ->
                 qbottom = VimGlobals.current_editor.getScrollBottom()
 
                 rows = Math.floor((qbottom - qtop)/lineSpacing()+1)
-                valid_loc = not (change.bufferDelta is 0 and \
-                        change.end-change.start >= rows-3)  and (change.start >= tln and \
-                    change.start < tln+rows-3)
+                #valid_loc = not (change.bufferDelta is 0 and \
+                        #change.end-change.start >= rows-3)  and (change.start >= tln and \
+                    #change.start < tln+rows-3)
     
+                valid_loc = not ( change.end-change.start >= rows-3)  and (change.start >= tln and \
+                    change.start < tln+rows-3)
 
                 if undo_fix and valid_loc
                     console.log 'change:',change
@@ -828,7 +830,10 @@ class VimState
                 if DEBUG
                     initial = 0
                 else
-                    initial = 4
+                    if VimGlobals.current_editor.getLineCount()>=1000
+                        initial = 5
+                    else
+                        initial = 4
 
                 for posi in [0..rows-2]
                     if not (tlnumberarr[posi] is -1)
@@ -836,7 +841,7 @@ class VimState
                             qq = screen_f[posi]
                             qq = qq[initial..].join('')
                             linerange = new Range(new Point(VimGlobals.tlnumber+posi,0),
-                                                    new Point(VimGlobals.tlnumber + posi, COLS-4))
+                                                    new Point(VimGlobals.tlnumber + posi, COLS-initial))
 
                             txt = VimGlobals.current_editor.buffer.getTextInRange(linerange)
                             if qq isnt txt
@@ -851,7 +856,7 @@ class VimState
                 if not DEBUG
                     VimGlobals.current_editor.setCursorBufferPosition(
                         new Point(VimGlobals.tlnumber + @location[0],
-                        @location[1]-4),{autoscroll:true})
+                        @location[1]-initial),{autoscroll:true})
                 else
                     VimGlobals.current_editor.setCursorBufferPosition(
                         new Point(VimGlobals.tlnumber + @location[0],
