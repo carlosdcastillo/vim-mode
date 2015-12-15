@@ -21,6 +21,7 @@ DEBUG = false
 
 COLS = 180
 
+mode = 'command'
 subscriptions = {}
 subscriptions['redraw'] = false
 screen = []
@@ -41,7 +42,8 @@ buffer_destroy_subscription = undefined
 scrolltop = undefined
 
 element = document.createElement("item-view")
-interval_sync = setInterval ( -> ns_redraw_win_end()), 150
+interval_sync = undefined
+interval_timeout = undefined
 
 socket2 = new net.Socket()
 socket2.connect(CONNECT_TO)
@@ -95,6 +97,35 @@ tmpsession.request('vim_get_api_info', [], (err, res) ->
     VimGlobals.session.attach(socket, socket)
 )
 
+#These two functions are a work around so we don't stack
+#vim_evals in the middle of the user typing text.
+#see: https://github.com/neovim/neovim/issues/3720
+
+activate_timer = () ->
+    f  =  -> ( ns_redraw_win_end())
+    g =  -> (
+                console.log 'INNER',element.innerHTML
+                text = element.innerHTML.split('&nbsp;').join(' ')
+                text = text.split('<samp>')[1]
+                text = text.split('</samp>')[0]
+                console.log 'text:',text
+
+                textb = text[0..text.length/2]
+                text = text[text.length/2..text.length-1]
+                text = text.split(' ').join('')
+                console.log 'text:',text
+                if (mode is 'command' and text.length == 1 and textb.indexOf('VISUAL')==-1)
+                    neovim_send_message(['vim_input',['<Esc>']])
+                interval_sync = setInterval(f, 100)
+            )
+    interval_timeout = setTimeout(g, 500)
+
+deactivate_timer = () ->
+    if interval_timeout
+        clearTimeout(interval_timeout)
+    if interval_sync
+        clearInterval(interval_sync)
+
 
 neovim_send_message = (message,f = undefined) ->
     try
@@ -137,7 +168,6 @@ register_change_handler = () ->
 
                 #undo_fix = true
 
-    
                 qtop = VimGlobals.current_editor.getScrollTop()
                 qbottom = VimGlobals.current_editor.getScrollBottom()
 
@@ -151,7 +181,7 @@ register_change_handler = () ->
                 #valid_loc = not (change.bufferDelta is 0 and \
                         #change.end-change.start >= rows-3)  and (change.start >= tln and \
                     #change.start < tln+rows-3)
-    
+
                 valid_loc =  not (change.bufferDelta is 0 and \
                         change.end-change.start >= rows) and (change.start >= tln and  change.start < bot)
 
@@ -172,7 +202,7 @@ register_change_handler = () ->
                 console.log err
                 console.log 'err: probably not a text editor window changed'
 
-        
+
         #last_text = VimGlobals.current_editor.getText()
         #
 
@@ -507,13 +537,19 @@ class EventHandler
                     @screen_left = parseInt(util.inspect(x[1][2]))
                     @screen_right = parseInt(util.inspect(x[1][3]))
 
-                else if x[0] is "insert_mode"
-                    @vimState.activateInsertMode()
-                    @command_mode = false
-
-                else if x[0] is "normal_mode"
-                    @vimState.activateCommandMode()
-                    @command_mode = true
+                else if x[0] is "mode_change"
+                    if x[1][0] is 'insert'
+                        @vimState.activateInsertMode()
+                        @command_mode = false
+                    else if x[1][0] is 'normal'
+                        @vimState.activateCommandMode()
+                        @command_mode = true
+                    else if x[1][0] is 'replace'
+                        @vimState.activateReplaceMode()
+                        @command_mode = true
+                    else
+                        @vimState.activateCommandMode()
+                        @command_mode = true
 
                 else if x[0] is "bell"
                     atom.beep()
@@ -668,16 +704,16 @@ class EventHandler
 
             VimGlobals.internal_change = false
 
+
 module.exports =
 class VimState
     editor: null
-    mode: null
 
     constructor: (@editorView) ->
         @editor = @editorView.getModel()
         editor_views[@editor.getURI()] = @editorView
         @editorView.component.setInputEnabled(false)
-        @mode = 'command'
+        mode = 'command'
         @cursor_visible = true
         @scrolled_down = false
         VimGlobals.tlnumber = 0
@@ -710,24 +746,36 @@ class VimState
             vim_mode_save_file()
 
         @editorView.onkeypress = (e) =>
+            deactivate_timer()
             q1 = @editorView.classList.contains('is-focused')
             q2 = @editorView.classList.contains('autocomplete-active')
             if q1 and not q2
+                @editorView.component.setInputEnabled(false)
                 q =  String.fromCharCode(e.which)
                 neovim_send_message(['vim_input',[q]])
+                activate_timer()
                 false
             else
+                if q1 and q2
+                    @editorView.component.setInputEnabled(true)
+                activate_timer()
                 true
 
         @editorView.onkeydown = (e) =>
+            deactivate_timer();
             q1 = @editorView.classList.contains('is-focused')
             q2 = @editorView.classList.contains('autocomplete-active')
             if q1 and not q2 and not e.altKey
+                @editorView.component.setInputEnabled(false)
                 translation = @translateCode(e.which, e.shiftKey, e.ctrlKey)
                 if translation != ""
                     neovim_send_message(['vim_input',[translation]])
+                    activate_timer()
                     false
             else
+                if q1 and q2
+                    @editorView.component.setInputEnabled(true)
+                activate_timer()
                 true
 
 
@@ -790,9 +838,14 @@ class VimState
         neovim_send_message(['vim_command',['set incsearch']])
         neovim_send_message(['vim_command',['set autoread']])
         neovim_send_message(['vim_command',['set laststatus=1']])
+        #neovim_send_message(['vim_command',['set visualbell']])
+
 
         neovim_send_message(['vim_command',
             ['set backspace=indent,eol,start']])
+
+        neovim_send_message(['vim_input',['<Esc>']])
+        @activateCommandMode()
 
         if not subscriptions['redraw']
             #console.log 'subscribing, after open'
@@ -844,7 +897,6 @@ class VimState
                     initial = 0
                 else
                     if VimGlobals.current_editor.getLineCount()>=1000
-                        initial = 5
                     else
                         initial = 4
 
@@ -898,18 +950,22 @@ class VimState
 
     #Used to enable command mode.
     activateCommandMode: ->
-        @mode = 'command'
+        mode = 'command'
         @changeModeClass('command-mode')
         @updateStatusBar()
 
     #Used to enable insert mode.
     activateInsertMode: (transactionStarted = false)->
-        @mode = 'insert'
+        mode = 'insert'
         @changeModeClass('insert-mode')
         @updateStatusBar()
 
+    activateReplaceMode: ()->
+        mode = 'replace'
+        @changeModeClass('command-mode')
+
     activateInvisibleMode: (transactionStarted = false)->
-        @mode = 'insert'
+        mode = 'insert'
         @changeModeClass('invisible-mode')
         @updateStatusBar()
 
@@ -917,13 +973,12 @@ class VimState
         if VimGlobals.current_editor
             editorview = editor_views[VimGlobals.current_editor.getURI()]
             if editorview
-                for mode in ['command-mode', 'insert-mode', 'visual-mode',
+                for qmode in ['command-mode', 'insert-mode', 'visual-mode',
                             'operator-pending-mode', 'invisible-mode']
-                    if mode is targetMode
-                        editorview.classList.add(mode)
+                    if qmode is targetMode
+                        editorview.classList.add(qmode)
                     else
-                        editorview.classList.remove(mode)
-
+                        editorview.classList.remove(qmode)
     updateStatusBarWithText:(text, addcursor, loc) ->
         if addcursor
             text = text[0..loc-1].concat('&#9632').concat(text[loc+1..])
@@ -933,6 +988,4 @@ class VimState
         element.innerHTML = q.concat(text).concat(qend)
 
     updateStatusBar: ->
-        element.innerHTML = @mode
-
-
+        element.innerHTML = mode

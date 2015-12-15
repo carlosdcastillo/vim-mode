@@ -4,6 +4,7 @@
   'ctrl-b': 'core:cancel'
   'ctrl-f': 'core:cancel'
   'ctrl-n': 'core:cancel'
+  'ctrl-p': 'core:cancel'
   'tab': 'unset!'
   'end': 'core:cancel' 
   'home': 'core:cancel' 
