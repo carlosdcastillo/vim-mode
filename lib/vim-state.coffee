@@ -897,6 +897,7 @@ class VimState
                     initial = 0
                 else
                     if VimGlobals.current_editor.getLineCount()>=1000
+                        initial = 5
                     else
                         initial = 4
 
