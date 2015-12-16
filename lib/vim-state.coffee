@@ -40,6 +40,7 @@ buffer_change_subscription = undefined
 buffer_destroy_subscription = undefined
 
 scrolltop = undefined
+reversed_selection = false
 
 element = document.createElement("item-view")
 interval_sync = undefined
@@ -360,18 +361,26 @@ cursorPosChanged = (event) ->
         VimGlobals.internal_change = true
         if editor_views[VimGlobals.current_editor.getURI()].classList.contains('is-focused')
             pos = event.newBufferPosition
-            r = pos.row + 1
-            c = pos.column + 1
+            rp = pos.row + 1
+            cp = pos.column + 1
             sel = VimGlobals.current_editor.getSelectedBufferRange()
+            r = sel.end.row + 1
+            c = sel.end.column + 1
+            reversed_selection = false
+            console.log '!!!!!!!!!!!!!!!!!!!!!!!!!',r,rp,c,cp
+            if r isnt rp or c isnt cp
+                r = sel.start.row + 1
+                c = sel.start.column + 1
+                reversed_selection = true
+
             #console.log 'sel:',sel
             neovim_send_message(['vim_command',['cal cursor('+r+','+c+')']],
                 (() ->
                     if not sel.isEmpty()
-                        VimGlobals.current_editor.setSelectedBufferRange(sel,
-                            sel.end.isLessThan(sel.start))
+                        VimGlobals.current_editor.setSelectedBufferRange(sel,{reversed:reversed_selection})
                 )
             )
-        VimGlobals.internal_change = false
+            VimGlobals.internal_change = false
 
 scrollTopChanged = () ->
     if not VimGlobals.internal_change and not VimGlobals.updating
@@ -387,18 +396,28 @@ scrollTopChanged = () ->
                     ##console.log 'scroll down:',diff
                     #neovim_send_message(['vim_input',['<ScrollWheelDown>']])
         else
+            up = false
+            if scrolltop
+                diff = scrolltop - VimGlobals.current_editor.getScrollTop()
+                if diff > 0
+                    up = false
+                else
+                    up = true
 
             sels = VimGlobals.current_editor.getSelectedBufferRanges()
             #console.log 'sels:',sels
             for sel in sels
-                r = sel.start.row + 1
-                c = sel.start.column + 1
+                if up
+                    r = sel.start.row + 1
+                    c = sel.start.column + 1
+                else
+                    r = sel.end.row + 1
+                    c = sel.end.column + 1
                 #console.log 'sel:',sel
                 neovim_send_message(['vim_command',['cal cursor('+r+','+c+')']],
                     (() ->
                         if not sel.isEmpty()
-                            VimGlobals.current_editor.setSelectedBufferRange(sel,
-                                sel.end.isLessThan(sel.start))
+                            VimGlobals.current_editor.setSelectedBufferRange(sel,{selected: up})
                     )
                 )
 
@@ -750,14 +769,11 @@ class VimState
             q1 = @editorView.classList.contains('is-focused')
             q2 = @editorView.classList.contains('autocomplete-active')
             if q1 and not q2
-                @editorView.component.setInputEnabled(false)
                 q =  String.fromCharCode(e.which)
                 neovim_send_message(['vim_input',[q]])
                 activate_timer()
                 false
             else
-                if q1 and q2
-                    @editorView.component.setInputEnabled(true)
                 activate_timer()
                 true
 
@@ -766,15 +782,12 @@ class VimState
             q1 = @editorView.classList.contains('is-focused')
             q2 = @editorView.classList.contains('autocomplete-active')
             if q1 and not q2 and not e.altKey
-                @editorView.component.setInputEnabled(false)
                 translation = @translateCode(e.which, e.shiftKey, e.ctrlKey)
                 if translation != ""
                     neovim_send_message(['vim_input',[translation]])
                     activate_timer()
                     false
             else
-                if q1 and q2
-                    @editorView.component.setInputEnabled(true)
                 activate_timer()
                 true
 
@@ -930,8 +943,9 @@ class VimState
 
             VimGlobals.current_editor.setScrollTop(lineSpacing()*VimGlobals.tlnumber)
 
+            console.log 'sbr:',sbr
             if not sbr.isEmpty()
-                VimGlobals.current_editor.setSelectedBufferRange(sbr)
+                VimGlobals.current_editor.setSelectedBufferRange(sbr,{reversed:reversed_selection})
 
     neovim_subscribe: =>
         #console.log 'neovim_subscribe'
