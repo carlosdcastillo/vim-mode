@@ -39,6 +39,9 @@ cursorpositionchange_subscription = undefined
 buffer_change_subscription = undefined
 buffer_destroy_subscription = undefined
 
+non_file_assoc_atom_to_nvim = {}
+non_file_assoc_nvim_to_atom = {}
+
 scrolltop = undefined
 reversed_selection = false
 
@@ -127,7 +130,6 @@ deactivate_timer = () ->
     if interval_sync
         clearInterval(interval_sync)
 
-
 neovim_send_message = (message,f = undefined) ->
     try
         if message[0] and message[1]
@@ -186,7 +188,7 @@ register_change_handler = () ->
                 valid_loc =  not (change.bufferDelta is 0 and \
                         change.end-change.start >= rows) and (change.start >= tln and  change.start < bot)
 
-                console.log 'try tln:',tln,'start:',change.start, 'bot:',bot
+                #console.log 'try tln:',tln,'start:',change.start, 'bot:',bot
                 if undo_fix and valid_loc
                     console.log 'change:',change
                     console.log 'tln:',tln,'start:',change.start, 'rows:',rows
@@ -314,25 +316,35 @@ ns_redraw_win_end = () ->
 
     if not VimGlobals.updating and not VimGlobals.internal_change
         neovim_send_message(['vim_eval',["expand('%:p')"]], (filename) ->
+            if filename.indexOf('term://') == -1
+                filename = filename.replace /^\s+|\s+$/g, ""
+                console.log 'filename after processing:', filename
+                if filename is ''
+                    filename = 'newfile'+next_new_file_id
+                    next_new_file_id = next_new_file_id + 1
 
-            filename = filename.replace /^\s+|\s+$/g, ""
-            if filename is ''
-                filename = 'newfile'+next_new_file_id
-                next_new_file_id = next_new_file_id + 1
+                #console.log 'orig filename reported by vim:',filename
+                ncefn =  VimUtils.normalize_filename(uri)
+                nfn = VimUtils.normalize_filename(filename)
 
-            #console.log 'orig filename reported by vim:',filename
-            ncefn =  VimUtils.normalize_filename(uri)
-            nfn = VimUtils.normalize_filename(filename)
+                if ncefn and nfn and nfn isnt ncefn
+                    #console.log '-------------------------------',nfn
+                    #console.log '*******************************',ncefn
+                    atom.workspace.open(filename)
 
-            if ncefn and nfn and nfn isnt ncefn
-                #console.log '-------------------------------',nfn
-                #console.log '*******************************',ncefn
-                atom.workspace.open(filename)
+                else
+                    if filename and uri
 
+                        sync_lines()
+            else if filename of non_file_assoc_nvim_to_atom
+                sync_lines()
             else
-                if filename and uri
-
-                    sync_lines()
+                tmpfilename = 'newfile'+next_new_file_id
+                next_new_file_id = next_new_file_id + 1
+                non_file_assoc_atom_to_nvim[tmpfilename] = filename
+                non_file_assoc_nvim_to_atom[filename] = tmpfilename
+                atom.workspace.open(tmpfilename)
+                sync_lines()
         )
 
     active_change = false
@@ -468,11 +480,19 @@ activePaneChanged = () =>
             VimGlobals.current_editor = atom.workspace.getActiveTextEditor()
             if VimGlobals.current_editor
                 filename = atom.workspace.getActiveTextEditor().getURI()
-                if filename
-                    cmd = 'e! '+ filename
+                filename2 = filename.split('/')
+                if filename2[filename2.length-1] of non_file_assoc_atom_to_nvim
+                    cmd = 'b '+ non_file_assoc_atom_to_nvim[filename2[filename2.length-1]]
+                    for key, value of non_file_assoc_atom_to_nvim
+                        console.log 'key:',key, 'value:',value
+                    console.log 'CMD: ', cmd
+
                 else
-                    cmd = 'e! newfile'+next_new_file_id
-                    next_new_file_id = next_new_file_id + 1
+                    if filename
+                        cmd = 'e! '+ filename
+                    else
+                        cmd = 'e! newfile'+next_new_file_id
+                        next_new_file_id = next_new_file_id + 1
 
                 neovim_send_message(['vim_command',[cmd]],(x) =>
 
@@ -768,11 +788,17 @@ class VimState
             deactivate_timer()
             q1 = @editorView.classList.contains('is-focused')
             q2 = @editorView.classList.contains('autocomplete-active')
-            if q1 and not q2
+            q3 = VimGlobals.current_editor.getSelectedBufferRange().isEmpty()
+            if q1 and not q2 and q3
+                @editorView.component.setInputEnabled(false)
                 q =  String.fromCharCode(e.which)
                 neovim_send_message(['vim_input',[q]])
                 activate_timer()
                 false
+            else if q1 and not q2 and not q3
+                @editorView.component.setInputEnabled(true)
+                activate_timer()
+                true
             else
                 activate_timer()
                 true
@@ -781,12 +807,18 @@ class VimState
             deactivate_timer();
             q1 = @editorView.classList.contains('is-focused')
             q2 = @editorView.classList.contains('autocomplete-active')
-            if q1 and not q2 and not e.altKey
+            q3 = VimGlobals.current_editor.getSelectedBufferRange().isEmpty()
+            if q1 and not q2 and not e.altKey and q3
+                @editorView.component.setInputEnabled(false)
                 translation = @translateCode(e.which, e.shiftKey, e.ctrlKey)
                 if translation != ""
                     neovim_send_message(['vim_input',[translation]])
                     activate_timer()
                     false
+            else if q1 and not q2 and not q3
+                @editorView.component.setInputEnabled(true)
+                activate_timer()
+                true
             else
                 activate_timer()
                 true
@@ -943,7 +975,7 @@ class VimState
 
             VimGlobals.current_editor.setScrollTop(lineSpacing()*VimGlobals.tlnumber)
 
-            console.log 'sbr:',sbr
+            #console.log 'sbr:',sbr
             if not sbr.isEmpty()
                 VimGlobals.current_editor.setSelectedBufferRange(sbr,{reversed:reversed_selection})
 
