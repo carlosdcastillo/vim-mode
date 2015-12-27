@@ -28,7 +28,7 @@ Install vim-mode
     $ cd .atom/packages
     $ git clone https://github.com/carlosdcastillo/vim-mode.git
     $ cd vim-mode
-    $ apm install # install dependencies
+    $ npm install # install dependencies
 
 On OS X and Linux, create a folder for the named pipe:
 
