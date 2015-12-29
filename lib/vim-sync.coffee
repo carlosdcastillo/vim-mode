@@ -28,7 +28,7 @@ neovim_set_text = (text, start, end, delta) ->
     for item in lines_tmp
         lines.push item.split('\r').join('')
 
-    lines = lines[0..lines.length-2]
+    lines = lines[0..lines.length-1]
     cpos = VimGlobals.current_editor.getCursorScreenPosition()
     neovim_send_message(['vim_get_current_buffer',[]],
         ((buf) ->
@@ -68,6 +68,7 @@ neovim_set_text = (text, start, end, delta) ->
                                     else
                                         l.push('')
 
+
                             send_data(buf,l,delta,-delta, cpos.row+1, cpos.column+1)
 
                         )
@@ -86,9 +87,19 @@ send_data = (buf, l, delta, i, r, c) ->
     lines = []
     l2 = []
     for item in l
-        item2 = item.split('\\').join('\\\\')
-        item2 = item2.split('"').join('\\"')
-        l2.push '"'+item2+'"'
+        if item
+            item2 = item.split('\\').join('\\\\')
+            if item2
+                item2 = item2.split('"').join('\\"')
+                if item2
+                    l2.push '"'+item2+'"'
+                else
+                    l2.push '""'
+            else
+                l2.push '""'
+        else
+            l2.push '""'
+
 
     lines.push('cal setline(1, ['+l2.join()+'])')
     lines.push('redraw!')

@@ -110,17 +110,19 @@ activate_timer = () ->
     g =  -> (
                 console.log 'INNER',element.innerHTML
                 text = element.innerHTML.split('&nbsp;').join(' ')
-                text = text.split('<samp>')[1]
-                text = text.split('</samp>')[0]
-                console.log 'text:',text
+                if text
+                    text = text.split('<samp>')[1]
+                    if text
+                        text = text.split('</samp>')[0]
+                        console.log 'text:',text
 
-                textb = text[0..text.length/2]
-                text = text[text.length/2..text.length-1]
-                text = text.split(' ').join('')
-                console.log 'text:',text
-                if (mode is 'command' and text.length == 1 and textb.indexOf('VISUAL')==-1)
-                    neovim_send_message(['vim_input',['<Esc>']])
-                interval_sync = setInterval(f, 100)
+                        textb = text[0..text.length/2]
+                        text = text[text.length/2..text.length-1]
+                        text = text.split(' ').join('')
+                        console.log 'text:',text
+                        if (mode is 'command' and text.length == 1 and textb.indexOf('VISUAL')==-1)
+                            neovim_send_message(['vim_input',['<Esc>']])
+                        interval_sync = setInterval(f, 100)
             )
     interval_timeout = setTimeout(g, 500)
 
@@ -232,7 +234,7 @@ sync_lines = () ->
             if VimGlobals.current_editor.buffer.getLastRow() < parseInt(nLines)
                 nl = parseInt(nLines) - VimGlobals.current_editor.buffer.getLastRow()
                 diff = ''
-                for i in [0..nl-1]
+                for i in [0..nl-2]
                     diff = diff + '\n'
                 append_options = {normalizeLineEndings: false}
                 VimGlobals.current_editor.buffer.append(diff, append_options)
@@ -918,13 +920,23 @@ class VimState
             screen_f.push line
 
     redraw_screen:(rows, dirty) =>
+
         if VimGlobals.current_editor
+
+            if DEBUG
+                initial = 0
+            else
+                if VimGlobals.current_editor.getLineCount()>=1000
+                    initial = 5
+                else
+                    initial = 4
+
             sbr = VimGlobals.current_editor.getSelectedBufferRange()
             @postprocess(rows, dirty)
             tlnumberarr = []
             for posi in [0..rows-1]
                 try
-                    pos = parseInt(screen_f[posi][0..3].join(''))
+                    pos = parseInt(screen_f[posi][0..(initial-1)].join(''))
                     if not isNaN(pos)
                         tlnumberarr.push (  (pos - 1) - posi  )
                     else
@@ -938,13 +950,6 @@ class VimState
 
                 options =  { normalizeLineEndings: false, undo: 'skip' }
 
-                if DEBUG
-                    initial = 0
-                else
-                    if VimGlobals.current_editor.getLineCount()>=1000
-                        initial = 5
-                    else
-                        initial = 4
 
                 for posi in [0..rows-2]
                     if not (tlnumberarr[posi] is -1)
