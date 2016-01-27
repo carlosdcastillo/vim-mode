@@ -28,7 +28,7 @@ neovim_set_text = (text, start, end, delta) ->
     for item in lines_tmp
         lines.push item.split('\r').join('')
 
-    lines = lines[0..lines.length-1]
+    lines = lines[0..lines.length-2]
     cpos = VimGlobals.current_editor.getCursorScreenPosition()
     neovim_send_message(['vim_get_current_buffer',[]],
         ((buf) ->
@@ -51,22 +51,13 @@ neovim_set_text = (text, start, end, delta) ->
                             for pos in [0..vim_lines.length + delta - 1]
                                 item = vim_lines[pos]
                                 if pos < start
-                                    if item
-                                        l.push(item)
-                                    else
-                                        l.push('')
+                                    l.push(item)
 
                                 if pos >= start and pos <= end + delta
-                                    if lines[pos]
-                                        l.push(lines[pos])
-                                    else
-                                        l.push('')
+                                    l.push(lines[pos])
 
                                 if pos > end + delta
-                                    if vim_lines[pos-delta]
-                                        l.push(vim_lines[pos-delta])
-                                    else
-                                        l.push('')
+                                    l.push(vim_lines[pos-delta])
 
 
                             send_data(buf,l,delta,-delta, cpos.row+1, cpos.column+1)
@@ -100,13 +91,13 @@ send_data = (buf, l, delta, i, r, c) ->
         else
             l2.push '""'
 
-
     lines.push('cal setline(1, ['+l2.join()+'])')
-    lines.push('redraw!')
+    #lines.push('undojoin')
 
     while j > l.length
         lines.push(''+(j)+'d')
         j = j - 1
+    #lines.push('undojoin')
     lines.push('cal cursor('+r+','+c+')')
     console.log 'lines2',lines
     VimGlobals.internal_change = true
@@ -118,12 +109,8 @@ send_data = (buf, l, delta, i, r, c) ->
 
 update_state = () ->
     VimGlobals.updating = false
-    VimGlobals.internal_change = true
-    neovim_send_message(['vim_command',['redraw!']],
-        (() ->
-            VimGlobals.internal_change = false
-        )
-    )
+    VimGlobals.internal_change = false
+
 
 module.exports = 
 

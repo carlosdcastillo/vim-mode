@@ -120,9 +120,11 @@ activate_timer = () ->
                         text = text[text.length/2..text.length-1]
                         text = text.split(' ').join('')
                         console.log 'text:',text
-                        if (mode is 'command' and text.length == 1 and textb.indexOf('VISUAL')==-1)
+                        console.log 'textb:',textb
+                        if ((text.length==1 and mode=='command' and textb.indexOf('VISUAL')==-1) )
                             neovim_send_message(['vim_input',['<Esc>']])
-                        interval_sync = setInterval(f, 100)
+                        if (textb.indexOf('completion')==-1)
+                            interval_sync = setInterval(f, 100)
             )
     interval_timeout = setTimeout(g, 500)
 
@@ -188,7 +190,7 @@ register_change_handler = () ->
                     #change.start < tln+rows-3)
 
                 valid_loc =  not (change.bufferDelta is 0 and \
-                        change.end-change.start >= rows) and (change.start >= tln and  change.start < bot)
+                        change.end-change.start >= rows) and (change.start >= tln-1 and  change.start < bot)
 
                 #console.log 'try tln:',tln,'start:',change.start, 'bot:',bot
                 if undo_fix and valid_loc
@@ -248,7 +250,11 @@ sync_lines = () ->
                 for i in [parseInt(nLines)..VimGlobals.current_editor.buffer.getLastRow()-1]
                     VimGlobals.current_editor.buffer.deleteRow(i)
 
-                VimGlobals.internal_change = false
+                neovim_send_message(['vim_command',['redraw!']],
+                    (() ->
+                        VimGlobals.internal_change = false
+                    )
+                 )
             else
                 VimGlobals.internal_change = false
 
@@ -291,28 +297,6 @@ ns_redraw_win_end = () ->
     if not editor_views[uri]
         return
 
-    neovim_send_message(['vim_eval',['&modified']], (mod) ->
-        #mod = VimUtils.buf2str(mod)
-
-        q = '.tab-bar .tab [data-path*="'
-        q = q.concat(uri)
-        q = q.concat('"]')
-        #console.log q
-
-        tabelement = document.querySelector(q)
-        if tabelement
-            tabelement = tabelement.parentNode
-            if tabelement
-                if parseInt(mod) == 1
-                    if not tabelement.classList.contains('modified')
-                        tabelement.classList.add('modified')
-                    tabelement.isModified = true
-                else
-                    if tabelement.classList.contains('modified')
-                        tabelement.classList.remove('modified')
-                    tabelement.isModified = false
-
-    )
 
     focused = editor_views[uri].classList.contains('is-focused')
 
@@ -367,7 +351,7 @@ lineSpacing = ->
 
 vim_mode_save_file = () ->
     #console.log 'inside neovim save file'
-    neovim_send_message(['vim_command',['write']])
+    neovim_send_message(['vim_command',['write!']])
 
 cursorPosChanged = (event) ->
 
@@ -471,10 +455,16 @@ destroyPaneItem = (event) ->
 
 activePaneChanged = () =>
     if active_change
-        if VimGlobals.updating
-            return
+       cnt = 0
+       while ( VimGlobals.updating or VimGlobals.internal_change)
+            console.log 'waiting for conditions'
+            cnt = cnt + 1
+            if cnt > 50
+                return
 
 
+
+        VimGlobals.tlnumber = -9999
         VimGlobals.updating = true
         VimGlobals.internal_change = true
 
@@ -520,7 +510,6 @@ activePaneChanged = () =>
                         register_change_handler()
 
                     scrolltop = undefined
-                    tlnumber = 0
 
                     editor_views[VimGlobals.current_editor.getURI()].vimState.afterOpen()
                 )
@@ -649,19 +638,34 @@ class EventHandler
                                 step = 1
                             else
                                 start = bottom
-                                stop = top - count + 1
+                                stop = top - count - 1
                                 step = -1
 
-                            for row in VimUtils.range(start,stop,step)
-                                dirty[row] = true
-                                target_row = screen[row]
-                                source_row = screen[row + count]
-                                for col in VimUtils.range(left,right+1)
-                                    target_row[col] = source_row[col]
 
-                            for row in  VimUtils.range(stop, stop+count,step)
-                                for col in  VimUtils.range(left,right+1)
-                                    screen[row][col] = ' '
+                            if count > 0
+                                for row in VimUtils.range(start,stop,step)
+                                    dirty[row] = true
+                                    target_row = screen[row]
+                                    source_row = screen[row + count]
+                                    for col in VimUtils.range(left,right+1)
+                                        target_row[col] = source_row[col]
+
+                                for row in  VimUtils.range(stop, stop+count,step)
+                                    for col in  VimUtils.range(left,right+1)
+                                        screen[row][col] = ' '
+                                        dirty[row] = true
+                            else
+                                for row in VimUtils.range(start,stop,step)
+                                    dirty[row] = true
+                                    target_row = screen[row]
+                                    source_row = screen[row + count]
+                                    for col in VimUtils.range(left,right+1)
+                                        target_row[col] = source_row[col]
+
+                                for row in  VimUtils.range(stop, stop+count-2,step)
+                                    for col in  VimUtils.range(left,right+1)
+                                        screen[row][col] = ' '
+                                        dirty[row] = true
 
                             scrolled = true
                             if count > 0
@@ -720,30 +724,30 @@ class EventHandler
 
         @vimState.redraw_screen(@rows, dirty)
 
-        if scrolled
-            neovim_send_message(['vim_command',['redraw!']],
-                (() ->
-                    scrolled = false
-                    options =  { normalizeLineEndings: false, undo: 'skip' }
-                    if VimGlobals.current_editor
-                        VimGlobals.current_editor.buffer.setTextInRange(new Range(
-                            new Point(VimGlobals.current_editor.buffer.getLastRow(),0),
-                            new Point(VimGlobals.current_editor.buffer.getLastRow(),COLS-4)),'',
-                            options)
+        #if scrolled
+            #neovim_send_message(['vim_command',['redraw!']],
+                #(() ->
+                    #scrolled = false
+                    #options =  { normalizeLineEndings: false, undo: 'skip' }
+                    #if VimGlobals.current_editor
+                        #VimGlobals.current_editor.buffer.setTextInRange(new Range(
+                            #new Point(VimGlobals.current_editor.buffer.getLastRow(),0),
+                            #new Point(VimGlobals.current_editor.buffer.getLastRow(),COLS-4)),'',
+                            #options)
 
-                    VimGlobals.internal_change = false
-                )
-            )
-        else
+                    #VimGlobals.internal_change = false
+                #)
+            #)
+        #else
 
-            options =  { normalizeLineEndings: false, undo: 'skip' }
-            if VimGlobals.current_editor
-                VimGlobals.current_editor.buffer.setTextInRange(new Range(
-                    new Point(VimGlobals.current_editor.buffer.getLastRow(),0),
-                    new Point(VimGlobals.current_editor.buffer.getLastRow(),COLS-4)),'',
-                    options)
+        options =  { normalizeLineEndings: false, undo: 'skip' }
+        if VimGlobals.current_editor
+            VimGlobals.current_editor.buffer.setTextInRange(new Range(
+                new Point(VimGlobals.current_editor.buffer.getLastRow(),0),
+                new Point(VimGlobals.current_editor.buffer.getLastRow(),COLS-4)),'',
+                options)
 
-            VimGlobals.internal_change = false
+        VimGlobals.internal_change = false
 
 
 module.exports =
@@ -785,6 +789,7 @@ class VimState
             e.preventDefault()
             e.stopPropagation()
             vim_mode_save_file()
+            VimGlobals.current_editor.buffer.reload()
 
         @editorView.onkeypress = (e) =>
             deactivate_timer()
@@ -884,7 +889,7 @@ class VimState
         neovim_send_message(['vim_command',['set showcmd']])
         neovim_send_message(['vim_command',['set incsearch']])
         neovim_send_message(['vim_command',['set autoread']])
-        neovim_send_message(['vim_command',['set laststatus=1']])
+        neovim_send_message(['vim_command',['set laststatus=2']])
         #neovim_send_message(['vim_command',['set visualbell']])
 
 
@@ -937,12 +942,12 @@ class VimState
             for posi in [0..rows-1]
                 try
                     pos = parseInt(screen_f[posi][0..(initial-1)].join(''))
-                    if not isNaN(pos)
-                        tlnumberarr.push (  (pos - 1) - posi  )
-                    else
-                        tlnumberarr.push -1
+                    #if not isNaN(pos)
+                    tlnumberarr.push (  (pos - 1) - posi  )
+                    #else
+                    #    tlnumberarr.push -1
                 catch err
-                    tlnumberarr.push -1
+                    tlnumberarr.push -9999
 
             VimGlobals.tlnumber = tlnumberarr[0]
 
@@ -951,8 +956,8 @@ class VimState
                 options =  { normalizeLineEndings: false, undo: 'skip' }
 
 
-                for posi in [0..rows-2]
-                    if not (tlnumberarr[posi] is -1)
+                for posi in [0..rows-3]
+                    if (VimGlobals.tlnumber isnt -9999)
                         if (tlnumberarr[posi] + posi == VimGlobals.tlnumber + posi) and dirty[posi]
                             qq = screen_f[posi]
                             qq = qq[initial..].join('')
@@ -1031,6 +1036,7 @@ class VimState
                         editorview.classList.add(qmode)
                     else
                         editorview.classList.remove(qmode)
+
     updateStatusBarWithText:(text, addcursor, loc) ->
         if addcursor
             text = text[0..loc-1].concat('&#9632').concat(text[loc+1..])
