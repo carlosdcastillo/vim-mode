@@ -21,6 +21,8 @@ DEBUG = false
 
 COLS = 180
 
+eventHandler = undefined
+nrows = 10 
 mode = 'command'
 subscriptions = {}
 subscriptions['redraw'] = false
@@ -285,7 +287,6 @@ ns_redraw_win_end = () ->
 
     uri = VimGlobals.current_editor.getURI()
 
-
     if not uri
         uri = 'newfile'+next_new_file_id
         next_new_file_id = next_new_file_id + 1
@@ -299,6 +300,15 @@ ns_redraw_win_end = () ->
 
 
     focused = editor_views[uri].classList.contains('is-focused')
+
+
+    qtop = VimGlobals.current_editor.getScrollTop()
+    qbottom = VimGlobals.current_editor.getScrollBottom()
+    qrows = Math.floor((qbottom - qtop)/lineSpacing()+1)
+    if (nrows isnt qrows)
+        editor_views[uri].vimState.neovim_resize(180, qrows)
+        nrows = qrows
+
 
     if not VimGlobals.updating and not VimGlobals.internal_change
         neovim_send_message(['vim_eval',["expand('%:p')"]], (filename) ->
@@ -351,7 +361,19 @@ lineSpacing = ->
 
 vim_mode_save_file = () ->
     #console.log 'inside neovim save file'
+    #
+    VimGlobals.current_editor = atom.workspace.getActiveTextEditor()
+    a = VimGlobals.current_editor.buffer.getLines().join('\n')
+
     neovim_send_message(['vim_command',['write!']])
+    setTimeout( ( ->
+
+                        VimGlobals.current_editor.buffer.reload()
+                        VimGlobals.internal_change = false
+                        VimGlobals.updating = false
+                ), 500)
+
+    #VimGlobals.current_editor.setText(a)
 
 cursorPosChanged = (event) ->
 
@@ -528,12 +550,15 @@ class EventHandler
         qbottom = VimGlobals.current_editor.getScrollBottom()
 
         @rows = Math.floor((qbottom - qtop)/lineSpacing()+1)
+
+        nrows = @rows
         #console.log 'rows:', @rows
 
-        height = Math.floor(50+(@rows-0.5) * lineSpacing())
+        height = Math.floor(30+(@rows) * lineSpacing())
 
         atom.setWindowDimensions ('width': 1400, 'height': height)
         @cols = COLS
+        screen = ((' ' for ux in [1..@cols])  for uy in [1..@rows-1])
         @command_mode = true
 
     handleEvent: (event, q) =>
@@ -545,7 +570,7 @@ class EventHandler
         VimGlobals.internal_change = true
         dirty = (false for i in [0..@rows-2])
 
-        if event is "redraw"
+        if event is "redraw" and subscriptions['redraw']
             #console.log "eventInfo", eventInfo
             for x in q
                 if not x
@@ -701,8 +726,9 @@ class EventHandler
                     #console.log 'clear'
                     for posj in [0..@cols-1]
                         for posi in [0..@rows-2]
-                            screen[posi][posj] = ' '
-                            dirty[posi] = true
+                            if screen and screen[posi]
+                                screen[posi][posj] = ' '
+                                dirty[posi] = true
 
                         @vimState.status_bar[posj] = ' '
 
@@ -712,9 +738,10 @@ class EventHandler
                     if ly < @rows - 1
                         for posj in [lx..@cols-1]
                             for posi in [ly..ly]
-                                if posj >= 0
-                                    dirty[posi] = true
-                                    screen[posi][posj] = ' '
+                                if screen and screen[posi]
+                                    if posj >= 0
+                                        dirty[posi] = true
+                                        screen[posi][posj] = ' '
 
                     else if ly == @rows - 1
                         for posj in [lx..@cols-1]
@@ -744,7 +771,7 @@ class EventHandler
         if VimGlobals.current_editor
             VimGlobals.current_editor.buffer.setTextInRange(new Range(
                 new Point(VimGlobals.current_editor.buffer.getLastRow(),0),
-                new Point(VimGlobals.current_editor.buffer.getLastRow(),COLS-4)),'',
+                new Point(VimGlobals.current_editor.buffer.getLastRow(),COLS-8)),'',
                 options)
 
         VimGlobals.internal_change = false
@@ -786,10 +813,12 @@ class VimState
                 atom.workspace.onDidDestroyPaneItem destroyPaneItem
 
         atom.commands.add 'atom-text-editor', 'core:save', (e) ->
+            VimGlobals.internal_change = true
+            VimGlobals.updating = true
             e.preventDefault()
             e.stopPropagation()
             vim_mode_save_file()
-            VimGlobals.current_editor.buffer.reload()
+
 
         @editorView.onkeypress = (e) =>
             deactivate_timer()
@@ -872,6 +901,7 @@ class VimState
         neovim_send_message(['vim_command',['set nocompatible']])
         neovim_send_message(['vim_command',['set noswapfile']])
         neovim_send_message(['vim_command',['set nowrap']])
+        neovim_send_message(['vim_command',['set numberwidth=8']])
         neovim_send_message(['vim_command',['set nu']])
         neovim_send_message(['vim_command',['set autochdir']])
         neovim_send_message(['vim_command',['set autoindent']])
@@ -914,7 +944,7 @@ class VimState
             line = undefined
             if screen[posi] and dirty[posi]
                 line = []
-                for posj in [0..screen[posi].length-2]
+                for posj in [0..COLS-8]
                     if screen[posi][posj]=='$' and screen[posi][posj+1]==' ' and
                        screen[posi][posj+2]==' '
                         break
@@ -931,17 +961,14 @@ class VimState
             if DEBUG
                 initial = 0
             else
-                if VimGlobals.current_editor.getLineCount()>=1000
-                    initial = 5
-                else
-                    initial = 4
+                initial = 8
 
             sbr = VimGlobals.current_editor.getSelectedBufferRange()
             @postprocess(rows, dirty)
             tlnumberarr = []
-            for posi in [0..rows-1]
+            for posi in [0..rows-3]
                 try
-                    pos = parseInt(screen_f[posi][0..(initial-1)].join(''))
+                    pos = parseInt(screen_f[posi][0..8].join(''))
                     #if not isNaN(pos)
                     tlnumberarr.push (  (pos - 1) - posi  )
                     #else
@@ -949,15 +976,20 @@ class VimState
                 catch err
                     tlnumberarr.push -9999
 
-            VimGlobals.tlnumber = tlnumberarr[0]
+            VimGlobals.tlnumber = NaN
+            for i in [0..rows-3] 
+                if not isNaN(tlnumberarr[i]) and tlnumberarr[i] >= 0
+                    VimGlobals.tlnumber = tlnumberarr[i]
+                    break
+
+            console.log 'TLNUMBERarr********************',tlnumberarr
+            console.log 'TLNUMBER********************',VimGlobals.tlnumber
 
             if dirty
 
                 options =  { normalizeLineEndings: false, undo: 'skip' }
-
-
                 for posi in [0..rows-3]
-                    if (VimGlobals.tlnumber isnt -9999)
+                    if not isNaN(VimGlobals.tlnumber) and (VimGlobals.tlnumber isnt -9999)
                         if (tlnumberarr[posi] + posi == VimGlobals.tlnumber + posi) and dirty[posi]
                             qq = screen_f[posi]
                             qq = qq[initial..].join('')
@@ -973,21 +1005,45 @@ class VimState
             sbt = @status_bar.join('')
             @updateStatusBarWithText(sbt, (rows - 1 == @location[0]), @location[1])
 
-            if @cursor_visible and @location[0] <= rows - 2
-                if not DEBUG
-                    VimGlobals.current_editor.setCursorBufferPosition(
-                        new Point(VimGlobals.tlnumber + @location[0],
-                        @location[1]-initial),{autoscroll:false})
-                else
-                    VimGlobals.current_editor.setCursorBufferPosition(
-                        new Point(VimGlobals.tlnumber + @location[0],
-                        @location[1]),{autoscroll:false})
+            if not isNaN(VimGlobals.tlnumber) and (VimGlobals.tlnumber isnt -9999)
 
-            VimGlobals.current_editor.setScrollTop(lineSpacing()*VimGlobals.tlnumber)
+                if @cursor_visible and @location[0] <= rows - 2
+                    if not DEBUG
+                        VimGlobals.current_editor.setCursorBufferPosition(
+                            new Point(VimGlobals.tlnumber + @location[0],
+                            @location[1]-initial),{autoscroll:false})
+                    else
+                        VimGlobals.current_editor.setCursorBufferPosition(
+                            new Point(VimGlobals.tlnumber + @location[0],
+                            @location[1]),{autoscroll:false})
+
+                VimGlobals.current_editor.setScrollTop(lineSpacing()*VimGlobals.tlnumber)
 
             #console.log 'sbr:',sbr
             if not sbr.isEmpty()
                 VimGlobals.current_editor.setSelectedBufferRange(sbr,{reversed:reversed_selection})
+
+    neovim_unsubscribe: =>
+        message = ['ui_detach',[]]
+        neovim_send_message(message)
+        subscriptions['redraw'] = false
+
+    neovim_resize:(cols, rows) =>
+
+        @cols = COLS
+        qtop = 10
+        qbotom =0
+        @rows = 0
+
+        qtop = VimGlobals.current_editor.getScrollTop()
+        qbottom = VimGlobals.current_editor.getScrollBottom()
+        @rows = Math.floor((qbottom - qtop)/lineSpacing()+1)
+
+        eventHandler.cols = @cols
+        eventHandler.rows= @rows+2
+        screen = ((' ' for ux in [1..@cols])  for uy in [1..@rows])
+        message = ['ui_try_resize',[@cols,@rows+2]]
+        neovim_send_message(message)
 
     neovim_subscribe: =>
         #console.log 'neovim_subscribe'
@@ -1001,7 +1057,6 @@ class VimState
         #rows = @editor.getScreenLineCount()
         @location = [0,0]
         @status_bar = (' ' for ux in [1..eventHandler.cols])
-        screen = ((' ' for ux in [1..eventHandler.cols])  for uy in [1..eventHandler.rows-1])
 
         subscriptions['redraw'] = true
 

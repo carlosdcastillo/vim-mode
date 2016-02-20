@@ -28,7 +28,7 @@ neovim_set_text = (text, start, end, delta) ->
     for item in lines_tmp
         lines.push item.split('\r').join('')
 
-    lines = lines[0..lines.length-2]
+    lines = lines[0..lines.length-1]
     cpos = VimGlobals.current_editor.getCursorScreenPosition()
     neovim_send_message(['vim_get_current_buffer',[]],
         ((buf) ->
@@ -43,9 +43,6 @@ neovim_set_text = (text, start, end, delta) ->
                             vim_lines = []
                             for item in vim_lines_r
                                 vim_lines.push item
-                                #vim_lines.push VimUtils.buf2str(item)
-                            #console.log 'vim_lines', vim_lines
-                            #console.log 'lines',lines
                             l = []
                             pos = 0
                             for pos in [0..vim_lines.length + delta - 1]
@@ -92,15 +89,17 @@ send_data = (buf, l, delta, i, r, c) ->
             l2.push '""'
 
     lines.push('cal setline(1, ['+l2.join()+'])')
-    #lines.push('undojoin')
+    lines.push('undojoin')
 
     while j > l.length
         lines.push(''+(j)+'d')
+        lines.push('undojoin')
         j = j - 1
-    #lines.push('undojoin')
+
     lines.push('cal cursor('+r+','+c+')')
     console.log 'lines2',lines
     VimGlobals.internal_change = true
+    VimGlobals.updating = true
     neovim_send_message(['vim_command', [lines.join(' | ')]],
                         update_state)
 
