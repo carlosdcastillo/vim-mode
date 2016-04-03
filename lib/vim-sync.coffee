@@ -35,7 +35,7 @@ neovim_set_text = (text, start, end, delta) ->
             #console.log 'buff',buf
             neovim_send_message(['buffer_line_count',[buf]],
                 ((vim_cnt) ->
-                    #console.log 'vimcnt',vim_cnt
+
                     neovim_send_message(['buffer_get_line_slice', [buf, 0,
                                                                     parseInt(vim_cnt), true,
                                                                     false]],

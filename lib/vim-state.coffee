@@ -19,10 +19,10 @@ else
 
 DEBUG = false
 
-COLS = 180
+COLS = 120
 
 eventHandler = undefined
-nrows = 10 
+nrows = 10
 mode = 'command'
 subscriptions = {}
 subscriptions['redraw'] = false
@@ -66,6 +66,8 @@ class RBuffer
 
 class RWindow
     constructor:(data) ->
+class RWindow
+    constructor:(data) ->
         @data = data
 
 class RTabpage
@@ -102,6 +104,24 @@ tmpsession.request('vim_get_api_info', [], (err, res) ->
     VimGlobals.session = new Session(types)
     VimGlobals.session.attach(socket, socket)
 )
+
+getMaxOccurrence = (arr) ->
+  o = {}
+  maxCount = 0
+  maxValue = undefined
+  m = undefined
+  i = 0
+  iLen = arr.length
+  while i < iLen
+    m = arr[i]
+    if !o.hasOwnProperty(m)
+      o[m] = 0
+    ++o[m]
+    if o[m] > maxCount
+      maxCount = o[m]
+      maxValue = m
+    i++
+  maxValue
 
 #These two functions are a work around so we don't stack
 #vim_evals in the middle of the user typing text.
@@ -363,8 +383,6 @@ vim_mode_save_file = () ->
     #console.log 'inside neovim save file'
     #
     VimGlobals.current_editor = atom.workspace.getActiveTextEditor()
-    a = VimGlobals.current_editor.buffer.getLines().join('\n')
-
     neovim_send_message(['vim_command',['write!']])
     setTimeout( ( ->
 
@@ -379,7 +397,9 @@ cursorPosChanged = (event) ->
 
     if not VimGlobals.internal_change
         VimGlobals.internal_change = true
-        if editor_views[VimGlobals.current_editor.getURI()].classList.contains('is-focused')
+
+        if (VimGlobals.current_editor and 
+                editor_views[VimGlobals.current_editor.getURI()].classList.contains('is-focused'))
             pos = event.newBufferPosition
             rp = pos.row + 1
             cp = pos.column + 1
@@ -393,6 +413,7 @@ cursorPosChanged = (event) ->
                 c = sel.start.column + 1
                 reversed_selection = true
 
+
             #console.log 'sel:',sel
             neovim_send_message(['vim_command',['cal cursor('+r+','+c+')']],
                 (() ->
@@ -404,44 +425,45 @@ cursorPosChanged = (event) ->
 
 scrollTopChanged = () ->
     if not VimGlobals.internal_change and not VimGlobals.updating
+        if VimGlobals.current_editor
+            if editor_views[VimGlobals.current_editor.getURI()].classList.contains('is-focused')
+                #console.log 'scrolled'
+                #if scrolltop
+                    #diff = scrolltop - VimGlobals.current_editor.getScrollTop()
+                    #if  diff > 0
+                        ##console.log 'scroll up:',diff
+                        #neovim_send_message(['vim_input',['<ScrollWheelUp>']])
+                    #else
+                        ##console.log 'scroll down:',diff
+                        #neovim_send_message(['vim_input',['<ScrollWheelDown>']])
+            else
+                up = false
+                if scrolltop
+                    diff = scrolltop - VimGlobals.current_editor.getScrollTop()
+                    if diff > 0
+                        up = false
+                    else
+                        up = true
 
-        if editor_views[VimGlobals.current_editor.getURI()].classList.contains('is-focused')
-            #console.log 'scrolled'
-            #if scrolltop
-                #diff = scrolltop - VimGlobals.current_editor.getScrollTop()
-                #if  diff > 0
-                    ##console.log 'scroll up:',diff
-                    #neovim_send_message(['vim_input',['<ScrollWheelUp>']])
-                #else
-                    ##console.log 'scroll down:',diff
-                    #neovim_send_message(['vim_input',['<ScrollWheelDown>']])
-        else
-            up = false
-            if scrolltop
-                diff = scrolltop - VimGlobals.current_editor.getScrollTop()
-                if diff > 0
-                    up = false
-                else
-                    up = true
-
-            sels = VimGlobals.current_editor.getSelectedBufferRanges()
-            #console.log 'sels:',sels
-            for sel in sels
-                if up
-                    r = sel.start.row + 1
-                    c = sel.start.column + 1
-                else
-                    r = sel.end.row + 1
-                    c = sel.end.column + 1
-                #console.log 'sel:',sel
-                neovim_send_message(['vim_command',['cal cursor('+r+','+c+')']],
-                    (() ->
-                        if not sel.isEmpty()
-                            VimGlobals.current_editor.setSelectedBufferRange(sel,{selected: up})
+                sels = VimGlobals.current_editor.getSelectedBufferRanges()
+                #console.log 'sels:',sels
+                for sel in sels
+                    if up
+                        r = sel.start.row + 1
+                        c = sel.start.column + 1
+                    else
+                        r = sel.end.row + 1
+                        c = sel.end.column + 1
+                    #console.log 'sel:',sel
+                    neovim_send_message(['vim_command',['cal cursor('+r+','+c+')']],
+                        (() ->
+                            if not sel.isEmpty()
+                                VimGlobals.current_editor.setSelectedBufferRange(sel,{selected: up})
+                        )
                     )
-                )
 
-    scrolltop = VimGlobals.current_editor.getScrollTop()
+    if VimGlobals.current_editor
+        scrolltop = VimGlobals.current_editor.getScrollTop()
 
 
 destroyPaneItem = (event) ->
@@ -701,26 +723,27 @@ class EventHandler
                             console.log 'problem scrolling'
 
                 else if x[0] is "put"
-                    cnt = 0
-                    #console.log 'put:',x[1..]
                     for v in x[1..]
                         try
-                            #v[0] = VimUtils.buf2str(v[0])
                             ly = @vimState.location[0]
                             lx = @vimState.location[1]
                             if 0<=ly and ly < @rows-1
-                                qq = v[0]
-                                screen[ly][lx] = qq[0]
-                                @vimState.location[1] = lx + 1
-                                dirty[ly] = true
+                                if v
+                                    qq = v[0]
+                                    if qq and screen[ly]
+                                        screen[ly][lx] = qq[0]
+                                        @vimState.location[1] = lx + 1
+                                        dirty[ly] = true
                             else if ly == @rows - 1
-                                qq = v[0]
-                                @vimState.status_bar[lx] = qq[0]
-                                @vimState.location[1] = lx + 1
+                                if v
+                                    qq = v[0]
+                                    if qq
+                                        @vimState.status_bar[lx] = qq[0]
+                                        @vimState.location[1] = lx + 1
                             else if ly > @rows - 1
                                 console.log 'over the max'
-                        catch
-                            console.log 'problem putting'
+                        catch err
+                            console.log 'problem putting',err
 
                 else if x[0] is "clear"
                     #console.log 'clear'
@@ -953,9 +976,9 @@ class VimState
                 if screen[posi]
                     line = screen[posi]
             screen_f.push line
-
     redraw_screen:(rows, dirty) =>
 
+        VimGlobals.current_editor = atom.workspace.getActiveTextEditor()
         if VimGlobals.current_editor
 
             if DEBUG
@@ -977,11 +1000,13 @@ class VimState
                     tlnumberarr.push -9999
 
             VimGlobals.tlnumber = NaN
-            for i in [0..rows-3] 
+            array = []
+            for i in [0..rows-3]
                 if not isNaN(tlnumberarr[i]) and tlnumberarr[i] >= 0
-                    VimGlobals.tlnumber = tlnumberarr[i]
-                    break
+                    array.push(tlnumberarr[i])
+            console.log array
 
+            VimGlobals.tlnumber = getMaxOccurrence(array)
             console.log 'TLNUMBERarr********************',tlnumberarr
             console.log 'TLNUMBER********************',VimGlobals.tlnumber
 
@@ -1017,7 +1042,8 @@ class VimState
                             new Point(VimGlobals.tlnumber + @location[0],
                             @location[1]),{autoscroll:false})
 
-                VimGlobals.current_editor.setScrollTop(lineSpacing()*VimGlobals.tlnumber)
+                if VimGlobals.current_editor
+                    VimGlobals.current_editor.setScrollTop(lineSpacing()*VimGlobals.tlnumber)
 
             #console.log 'sbr:',sbr
             if not sbr.isEmpty()
@@ -1037,6 +1063,7 @@ class VimState
 
         qtop = VimGlobals.current_editor.getScrollTop()
         qbottom = VimGlobals.current_editor.getScrollBottom()
+
         @rows = Math.floor((qbottom - qtop)/lineSpacing()+1)
 
         eventHandler.cols = @cols
