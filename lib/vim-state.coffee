@@ -23,6 +23,7 @@ COLS = 120
 
 eventHandler = undefined
 nrows = 10
+ncols = 10
 mode = 'command'
 subscriptions = {}
 subscriptions['redraw'] = false
@@ -325,9 +326,16 @@ ns_redraw_win_end = () ->
     qtop = VimGlobals.current_editor.getScrollTop()
     qbottom = VimGlobals.current_editor.getScrollBottom()
     qrows = Math.floor((qbottom - qtop)/lineSpacing()+1)
-    if (nrows isnt qrows)
+
+    qleft = VimGlobals.current_editor.getScrollLeft()
+    qright= VimGlobals.current_editor.getScrollRight()
+    qcols = Math.floor((qright-qleft)/lineSpacingHorizontal())-1
+
+
+    if (nrows isnt qrows or ncols isnt qcols)
         editor_views[uri].vimState.neovim_resize(180, qrows)
         nrows = qrows
+        ncols = qcols
 
 
     if not VimGlobals.updating and not VimGlobals.internal_change
@@ -378,6 +386,10 @@ lineSpacing = ->
     lineheight = parseFloat(atom.config.get('editor.lineHeight'))
     fontsize = parseFloat(atom.config.get('editor.fontSize'))
     return Math.floor(lineheight * fontsize)
+
+lineSpacingHorizontal = ->
+    fontsize = parseFloat(atom.config.get('editor.fontSize'))
+    return Math.floor(fontsize*0.6)
 
 vim_mode_save_file = () ->
     #console.log 'inside neovim save file'
@@ -1063,6 +1075,11 @@ class VimState
 
         qtop = VimGlobals.current_editor.getScrollTop()
         qbottom = VimGlobals.current_editor.getScrollBottom()
+
+        qleft = VimGlobals.current_editor.getScrollLeft()
+        qright= VimGlobals.current_editor.getScrollRight()
+
+        @cols = Math.floor((qright-qleft)/lineSpacingHorizontal())-1
 
         @rows = Math.floor((qbottom - qtop)/lineSpacing()+1)
 

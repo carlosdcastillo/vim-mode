@@ -29,7 +29,7 @@ neovim_set_text = (text, start, end, delta) ->
         lines.push item.split('\r').join('')
 
     lines = lines[0..lines.length-1]
-    cpos = VimGlobals.current_editor.getCursorScreenPosition()
+    cpos = VimGlobals.current_editor.getCursorBufferPosition()
     neovim_send_message(['vim_get_current_buffer',[]],
         ((buf) ->
             #console.log 'buff',buf
@@ -89,11 +89,11 @@ send_data = (buf, l, delta, i, r, c) ->
             l2.push '""'
 
     lines.push('cal setline(1, ['+l2.join()+'])')
-    lines.push('undojoin')
+    #lines.push('undojoin')
 
     while j > l.length
         lines.push(''+(j)+'d')
-        lines.push('undojoin')
+        #lines.push('undojoin')
         j = j - 1
 
     lines.push('cal cursor('+r+','+c+')')
