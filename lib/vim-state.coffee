@@ -591,7 +591,14 @@ class EventHandler
         height = Math.floor(30+(@rows) * lineSpacing())
 
         atom.setWindowDimensions ('width': 1400, 'height': height)
-        @cols = COLS
+
+        qleft = VimGlobals.current_editor.getScrollLeft()
+        qright= VimGlobals.current_editor.getScrollRight()
+
+        @cols = Math.floor((qright-qleft)/lineSpacingHorizontal())-1
+
+        COLS = @cols
+        @rows = Math.floor((qbottom - qtop)/lineSpacing()+1)
         screen = ((' ' for ux in [1..@cols])  for uy in [1..@rows-1])
         @command_mode = true
 
@@ -614,12 +621,18 @@ class EventHandler
                     for v in x[1..]
                         try
                             v[0] = util.inspect(v[0])
-                            v[1] = util.inspect(v[1])
                             @vimState.location[0] = parseInt(v[0])
-                            @vimState.location[1] = parseInt(v[1])
                         catch
+                            @vimState.location[0] = 0
                             console.log 'problem in goto'
 
+                        try
+                            v[1] = util.inspect(v[1])
+                            @vimState.location[1] = parseInt(v[1])
+                        catch
+                            @vimState.location[1] = 0
+                            console.log 'problem in goto'
+                        
                 else if x[0] is 'set_scroll_region'
                     @screen_top = parseInt(util.inspect(x[1][0]))
                     @screen_bot = parseInt(util.inspect(x[1][1]))
@@ -663,6 +676,8 @@ class EventHandler
                             left = @screen_left
                             right = @screen_right + 1
 
+                            if not v
+                                console.log 'not v'
                             count = parseInt(util.inspect(v[0]))
                             #console.log 'scrolling:',count
                             #tlnumber = tlnumber + count
@@ -711,28 +726,34 @@ class EventHandler
 
                                 for row in  VimUtils.range(stop, stop+count,step)
                                     for col in  VimUtils.range(left,right+1)
-                                        screen[row][col] = ' '
-                                        dirty[row] = true
+                                        if screen[row]
+                                            screen[row][col] = ' '
+                                            dirty[row] = true
                             else
                                 for row in VimUtils.range(start,stop,step)
                                     dirty[row] = true
                                     target_row = screen[row]
+
                                     source_row = screen[row + count]
                                     for col in VimUtils.range(left,right+1)
                                         target_row[col] = source_row[col]
 
-                                for row in  VimUtils.range(stop, stop+count-2,step)
+                                for row in  VimUtils.range(stop, stop+count-1,step)
                                     for col in  VimUtils.range(left,right+1)
-                                        screen[row][col] = ' '
-                                        dirty[row] = true
+                                        if screen[row]
+                                            screen[row][col] = ' '
+                                            dirty[row] = true
 
                             scrolled = true
                             if count > 0
                                 @vimState.scrolled_down = true
                             else
                                 @vimState.scrolled_down = false
-                        catch
-                            console.log 'problem scrolling'
+                        catch error
+
+                            
+                            console.log 'problem scrolling:',error
+                            console.log 'stack:',error.stack
 
                 else if x[0] is "put"
                     for v in x[1..]
@@ -742,7 +763,7 @@ class EventHandler
                             if 0<=ly and ly < @rows-1
                                 if v
                                     qq = v[0]
-                                    if qq and screen[ly]
+                                    if qq and screen[ly] and qq[0]
                                         screen[ly][lx] = qq[0]
                                         @vimState.location[1] = lx + 1
                                         dirty[ly] = true
@@ -865,7 +886,7 @@ class VimState
                 q =  String.fromCharCode(e.which)
                 neovim_send_message(['vim_input',[q]])
                 activate_timer()
-                false
+                true
             else if q1 and not q2 and not q3
                 @editorView.component.setInputEnabled(true)
                 activate_timer()
@@ -885,7 +906,7 @@ class VimState
                 if translation != ""
                     neovim_send_message(['vim_input',[translation]])
                     activate_timer()
-                    false
+                    true
             else if q1 and not q2 and not q3
                 @editorView.component.setInputEnabled(true)
                 activate_timer()
@@ -1016,11 +1037,11 @@ class VimState
             for i in [0..rows-3]
                 if not isNaN(tlnumberarr[i]) and tlnumberarr[i] >= 0
                     array.push(tlnumberarr[i])
-            console.log array
+            #console.log array
 
             VimGlobals.tlnumber = getMaxOccurrence(array)
-            console.log 'TLNUMBERarr********************',tlnumberarr
-            console.log 'TLNUMBER********************',VimGlobals.tlnumber
+            #console.log 'TLNUMBERarr********************',tlnumberarr
+            #console.log 'TLNUMBER********************',VimGlobals.tlnumber
 
             if dirty
 
@@ -1035,6 +1056,8 @@ class VimState
 
                             txt = VimGlobals.current_editor.buffer.getTextInRange(linerange)
                             if qq isnt txt
+                                console.log 'qq:',qq
+                                console.log 'txt:',txt
                                 VimGlobals.current_editor.buffer.setTextInRange(linerange,
                                     qq, options)
                             dirty[posi] = false
@@ -1068,9 +1091,10 @@ class VimState
 
     neovim_resize:(cols, rows) =>
 
-        @cols = COLS
+        VimGlobals.internal_change = true
+        VimGlobals.updating = true
         qtop = 10
-        qbotom =0
+        qbottom =0
         @rows = 0
 
         qtop = VimGlobals.current_editor.getScrollTop()
@@ -1081,13 +1105,24 @@ class VimState
 
         @cols = Math.floor((qright-qleft)/lineSpacingHorizontal())-1
 
+        COLS = @cols
         @rows = Math.floor((qbottom - qtop)/lineSpacing()+1)
 
         eventHandler.cols = @cols
         eventHandler.rows= @rows+2
-        screen = ((' ' for ux in [1..@cols])  for uy in [1..@rows])
         message = ['ui_try_resize',[@cols,@rows+2]]
         neovim_send_message(message)
+
+        screen = ((' ' for ux in [1..@cols])  for uy in [1..@rows])
+        @location = [0,0]
+        neovim_send_message(['vim_command',['redraw!']],
+            (() ->
+                VimGlobals.internal_change = false
+            )
+        )
+        VimGlobals.internal_change = false
+        VimGlobals.updating = false
+
 
     neovim_subscribe: =>
         #console.log 'neovim_subscribe'

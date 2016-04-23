@@ -45,7 +45,7 @@ neovim_set_text = (text, start, end, delta) ->
                                 vim_lines.push item
                             l = []
                             pos = 0
-                            for pos in [0..vim_lines.length + delta - 1]
+                            for pos in [0..vim_lines.length + delta]
                                 item = vim_lines[pos]
                                 if pos < start
                                     l.push(item)
@@ -91,7 +91,7 @@ send_data = (buf, l, delta, i, r, c) ->
     lines.push('cal setline(1, ['+l2.join()+'])')
     #lines.push('undojoin')
 
-    while j > l.length
+    while j >= l.length
         lines.push(''+(j)+'d')
         #lines.push('undojoin')
         j = j - 1
