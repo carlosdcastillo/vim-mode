@@ -36,29 +36,29 @@ neovim_set_text = (text, start, end, delta) ->
       neovim_send_message(['buffer_line_count',[buf]],
         ((vim_cnt) ->
 
-        neovim_send_message(['buffer_get_line_slice', [buf, 0,
-                                                      parseInt(vim_cnt),
-                                                      true,
-                                                      false]],
-          ((vim_lines_r) ->
-            vim_lines = []
-            for item in vim_lines_r
-              vim_lines.push item
-            l = []
-            pos = 0
-            for pos in [0..vim_lines.length + delta]
-              item = vim_lines[pos]
-              if pos < start
-                l.push(item)
+          neovim_send_message(['buffer_get_line_slice', [buf, 0,
+                                                        parseInt(vim_cnt),
+                                                        true,
+                                                        false]],
+            ((vim_lines_r) ->
+              vim_lines = []
+              for item in vim_lines_r
+                vim_lines.push item
+              l = []
+              pos = 0
+              for pos in [0..vim_lines.length + delta]
+                item = vim_lines[pos]
+                if pos < start
+                  l.push(item)
 
-              if pos >= start and pos <= end + delta
-                l.push(lines[pos])
+                if pos >= start and pos <= end + delta
+                  l.push(lines[pos])
 
-              if pos > end + delta
-                l.push(vim_lines[pos-delta])
+                if pos > end + delta
+                  l.push(vim_lines[pos-delta])
 
 
-            send_data(buf,l,delta,-delta, cpos.row+1, cpos.column+1)
+              send_data(buf,l,delta,-delta, cpos.row+1, cpos.column+1)
 
             )
           )
