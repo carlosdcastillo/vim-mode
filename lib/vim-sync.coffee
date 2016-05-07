@@ -30,6 +30,7 @@ neovim_set_text = (text, start, end, delta) ->
 
   lines = lines[0..lines.length-1]
   cpos = VimGlobals.current_editor.getCursorBufferPosition()
+
   neovim_send_message(['vim_get_current_buffer',[]],
     ((buf) ->
         #console.log 'buff',buf
@@ -46,7 +47,7 @@ neovim_set_text = (text, start, end, delta) ->
                 vim_lines.push item
               l = []
               pos = 0
-              for pos in [0..vim_lines.length + delta]
+              for pos in [0..vim_lines.length + delta-1]
                 item = vim_lines[pos]
                 if pos < start
                   l.push(item)
@@ -58,7 +59,7 @@ neovim_set_text = (text, start, end, delta) ->
                   l.push(vim_lines[pos-delta])
 
 
-              send_data(buf,l,delta,-delta, cpos.row+1, cpos.column+1)
+              send_data(buf,l,-delta, cpos.row+1, cpos.column+1)
 
             )
           )
@@ -71,8 +72,7 @@ neovim_set_text = (text, start, end, delta) ->
 #calls a function to update the state to the syncing from Atom -> Neovim
 #stops and the Neovim -> Atom change resumes.
 
-send_data = (buf, l, delta, i, r, c) ->
-  j = l.length + i
+send_data = (buf, l, i, r, c) ->
   lines = []
   l2 = []
   for item in l
@@ -89,16 +89,27 @@ send_data = (buf, l, delta, i, r, c) ->
     else
       l2.push '""'
 
+  lines.push('undojoin')
   lines.push('cal setline(1, ['+l2.join()+'])')
-  #lines.push('undojoin')
+  lines.push('undojoin')
 
-  while j >= l.length
-    lines.push(''+(j)+'d')
-    #lines.push('undojoin')
-    j = j - 1
+  if i > 0
+    j = l.length + i
+    while j > l.length
+      lines.push(''+(j)+'d')
+      lines.push('undojoin')
+      j = j - 1
+  #else
+    #k = -i
+    #j = l.length + k
+    #while j > l.length
+      #lines.push(''+(j)+'d')
+      #lines.push('undojoin')
+      #j = j - 1
 
   lines.push('cal cursor('+r+','+c+')')
   console.log 'lines2',lines
+
   VimGlobals.internal_change = true
   VimGlobals.updating = true
   neovim_send_message(['vim_command', [lines.join(' | ')]],

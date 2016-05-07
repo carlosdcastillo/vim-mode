@@ -226,12 +226,13 @@ register_change_handler = () ->
             console.log '(uri:',VimGlobals.current_editor.getURI(),\
               'start:',change.start
             console.log 'end:',change.end,'delta:',change.bufferDelta,')'
-
+            #deactivate_timer()
             VimGlobals.lupdates.push({uri: VimGlobals.current_editor.getURI(), \
                     text: last_text, start: change.start, end: change.end, \
                     delta: change.bufferDelta})
 
             VimSync.real_update()
+            #activate_timer()
 
         catch err
           console.log err
@@ -249,8 +250,12 @@ sync_lines = () ->
   if VimGlobals.updating
     return
 
+  if VimGlobals.internal_change
+    return
+
   if VimGlobals.current_editor
     VimGlobals.internal_change = true
+    VimGlobals.updating = true
     neovim_send_message(['vim_eval',["line('$')"]], (nLines) ->
 
       if VimGlobals.current_editor.buffer.getLastRow() < parseInt(nLines)
@@ -264,6 +269,7 @@ sync_lines = () ->
         neovim_send_message(['vim_command',['redraw!']],
             (() ->
               VimGlobals.internal_change = false
+              VimGlobals.updating = false
             )
          )
       else if VimGlobals.current_editor.buffer.getLastRow() > parseInt(nLines)
@@ -274,10 +280,12 @@ sync_lines = () ->
         neovim_send_message(['vim_command',['redraw!']],
             (() ->
               VimGlobals.internal_change = false
+              VimGlobals.updating = false
             )
          )
       else
         VimGlobals.internal_change = false
+        VimGlobals.updating = false
 
       )
 
@@ -343,11 +351,13 @@ ns_redraw_win_end = () ->
           atom.workspace.open(filename)
 
         else
+          #pass
           if filename and uri
 
             sync_lines()
       else if filename of non_file_assoc_nvim_to_atom
         sync_lines()
+        
       else
         tmpfilename = 'newfile'+next_new_file_id
         next_new_file_id = next_new_file_id + 1
@@ -857,6 +867,8 @@ class VimState
       else
         VimGlobals.internal_change = false
         VimGlobals.updating = false
+        q =  String.fromCharCode(e.which)
+        neovim_send_message(['vim_input',[q]])
         activate_timer()
         true
 
