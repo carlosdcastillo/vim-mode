@@ -350,13 +350,10 @@ ns_redraw_win_end = () ->
           #console.log '*******************************',ncefn
           atom.workspace.open(filename)
 
-        else
-          #pass
-          if filename and uri
-
-            sync_lines()
+        #else
+        #  if filename and uri
+        #    sync_lines()
       else if filename of non_file_assoc_nvim_to_atom
-        sync_lines()
         
       else
         tmpfilename = 'newfile'+next_new_file_id
@@ -364,7 +361,7 @@ ns_redraw_win_end = () ->
         non_file_assoc_atom_to_nvim[tmpfilename] = filename
         non_file_assoc_nvim_to_atom[filename] = tmpfilename
         atom.workspace.open(tmpfilename)
-        sync_lines()
+        #sync_lines()
     )
 
   active_change = false
@@ -588,7 +585,7 @@ class EventHandler
 
     COLS = @cols
     @rows = Math.floor((qbottom - qtop)/lineSpacing()+1)
-    screen = ((' ' for ux in [1..@cols])  for uy in [1..@rows-1])
+    screen = ((' ' for ux in [1..@cols])  for uy in [1..@rows+2])
     @command_mode = true
 
   handleEvent: (event, q) =>
@@ -598,7 +595,7 @@ class EventHandler
       return
 
     VimGlobals.internal_change = true
-    dirty = (false for i in [0..@rows-2])
+    dirty = (false for i in [0..@rows-1])
 
     if event is "redraw" and subscriptions['redraw']
         #console.log "eventInfo", eventInfo
@@ -752,7 +749,7 @@ class EventHandler
               if 0<=ly and ly < @rows-1
                 if v
                   qq = v[0]
-                  if qq and screen[ly] and qq[0]
+                  if qq and qq[0]
                     screen[ly][lx] = qq[0]
                     @vimState.location[1] = lx + 1
                     dirty[ly] = true
@@ -954,6 +951,8 @@ class VimState
     neovim_send_message(['vim_command',['set incsearch']])
     neovim_send_message(['vim_command',['set autoread']])
     neovim_send_message(['vim_command',['set laststatus=2']])
+    neovim_send_message(['vim_command',['set rulerformat=%L']])
+    neovim_send_message(['vim_command',['set ruler']])
     #neovim_send_message(['vim_command',['set visualbell']])
 
 
@@ -1045,6 +1044,25 @@ class VimState
 
       sbt = @status_bar.join('')
       @updateStatusBarWithText(sbt, (rows - 1 == @location[0]), @location[1])
+      
+      q = screen[rows-2]
+      text = q[q.length/2..q.length-1].join('')
+      text = text.split(' ').join('')
+      num_lines = parseInt(text, 10)
+
+      if VimGlobals.current_editor.buffer.getLastRow() < num_lines
+        nl = num_lines - VimGlobals.current_editor.buffer.getLastRow()
+        diff = ''
+        for i in [0..nl-2]
+          diff = diff + '\n'
+        append_options = {normalizeLineEndings: false}
+        VimGlobals.current_editor.buffer.append(diff, append_options)
+
+      else if VimGlobals.current_editor.buffer.getLastRow() > num_lines
+        for i in [num_lines..\
+            VimGlobals.current_editor.buffer.getLastRow()-1]
+          VimGlobals.current_editor.buffer.deleteRow(i)
+
 
       if not isNaN(VimGlobals.tlnumber) and (VimGlobals.tlnumber isnt -9999)
 
@@ -1096,7 +1114,7 @@ class VimState
     message = ['ui_try_resize',[@cols,@rows+2]]
     neovim_send_message(message)
 
-    screen = ((' ' for ux in [1..@cols])  for uy in [1..@rows])
+    screen = ((' ' for ux in [1..@cols])  for uy in [1..@rows+2])
     @location = [0,0]
     neovim_send_message(['vim_command',['redraw!']],
         (() ->
