@@ -89,23 +89,16 @@ send_data = (buf, l, i, r, c) ->
     else
       l2.push '""'
 
-  lines.push('undojoin')
+  #lines.push('undojoin')
   lines.push('cal setline(1, ['+l2.join()+'])')
-  lines.push('undojoin')
+  #lines.push('undojoin')
 
   if i > 0
     j = l.length + i
     while j > l.length
       lines.push(''+(j)+'d')
-      lines.push('undojoin')
-      j = j - 1
-  #else
-    #k = -i
-    #j = l.length + k
-    #while j > l.length
-      #lines.push(''+(j)+'d')
       #lines.push('undojoin')
-      #j = j - 1
+      j = j - 1
 
   lines.push('cal cursor('+r+','+c+')')
   console.log 'lines2',lines
