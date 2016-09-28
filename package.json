@@ -1,19 +1,19 @@
 {
-  "name": "atom-neovim",
-  "main": "./lib/vim-mode",
-  "version": "0.10.1",
-  "description": "Make Atom your GUI to Neovim.",
-  "license": "MIT",
-  "private": true,
-  "repository": "https://github.com/carlosdcastillo/vim-mode",
-  "engines": {
-    "atom": ">0.174.0"
-  },
-  "dependencies": {
-    "underscore-plus": "1.x",
-    "event-kit": "^0.7.2",
-    "atom-space-pen-views":"^2.0.3",
-    "jquery":"^2",
-    "msgpack5rpc":"1.0.1"
-  }
+    "name": "atom-neovim",
+    "main": "./lib/vim-mode",
+    "version": "0.10.1",
+    "description": "Make Atom your GUI to Neovim.",
+    "license": "MIT",
+    "private": true,
+    "repository": "https://github.com/carlosdcastillo/vim-mode",
+    "engines": {
+        "atom": ">0.174.0"
+    },
+    "dependencies": {
+        "underscore-plus": "1.x",
+        "event-kit": "^0.7.2",
+        "atom-space-pen-views":"^2.0.3",
+        "jquery":"^2",
+        "msgpack5rpc":"1.0.2"
+    }
 }
