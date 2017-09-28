@@ -201,7 +201,7 @@ register_change_handler = () ->
           #undo_fix = true
 
           qtop = VimGlobals.current_editor.element.getScrollTop()
-          qbottom = VimGlobals.current_editor.getScrollBottom()
+          qbottom = VimGlobals.current_editor.element.getScrollBottom()
 
           tln = Math.floor((qtop)/lineSpacing()+1)
           bot = Math.floor((qbottom )/lineSpacing()+1)
@@ -318,7 +318,7 @@ ns_redraw_win_end = () ->
 
 
   qtop = VimGlobals.current_editor.element.getScrollTop()
-  qbottom = VimGlobals.current_editor.getScrollBottom()
+  qbottom = VimGlobals.current_editor.element.getScrollBottom()
   qrows = Math.floor((qbottom - qtop)/lineSpacing()+1)
 
   qleft = VimGlobals.current_editor.getScrollLeft()
@@ -567,7 +567,7 @@ activePaneChanged = () ->
 class EventHandler
   constructor: (@vimState) ->
     qtop = VimGlobals.current_editor.element.getScrollTop()
-    qbottom = VimGlobals.current_editor.getScrollBottom()
+    qbottom = VimGlobals.current_editor.element.getScrollBottom()
 
     @rows = Math.floor((qbottom - qtop)/lineSpacing()+1)
 
@@ -1099,7 +1099,7 @@ class VimState
     @rows = 0
 
     qtop = VimGlobals.current_editor.element.getScrollTop()
-    qbottom = VimGlobals.current_editor.getScrollBottom()
+    qbottom = VimGlobals.current_editor.element.getScrollBottom()
 
     qleft = VimGlobals.current_editor.getScrollLeft()
     qright= VimGlobals.current_editor.getScrollRight()
