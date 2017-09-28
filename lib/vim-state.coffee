@@ -537,7 +537,8 @@ activePaneChanged = () ->
             VimGlobals.current_editor = atom.workspace.getActiveTextEditor()
             if VimGlobals.current_editor
               scrolltopchange_subscription =
-                VimGlobals.current_editor.onDidChangeScrollTop scrollTopChanged
+                VimGlobals.current_editor.element.onDidChangeScrollTop \
+                    scrollTopChanged
 
               cursorpositionchange_subscription =
                 VimGlobals.current_editor.onDidChangeCursorPosition \
