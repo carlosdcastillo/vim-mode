@@ -321,7 +321,7 @@ ns_redraw_win_end = () ->
   qbottom = VimGlobals.current_editor.element.getScrollBottom()
   qrows = Math.floor((qbottom - qtop)/lineSpacing()+1)
 
-  qleft = VimGlobals.current_editor.getScrollLeft()
+  qleft = VimGlobals.current_editor.element.getScrollLeft()
   qright= VimGlobals.current_editor.getScrollRight()
   qcols = Math.floor((qright-qleft)/lineSpacingHorizontal())-1
 
@@ -578,7 +578,7 @@ class EventHandler
 
     atom.setWindowDimensions ('width': 1400, 'height': height)
 
-    qleft = VimGlobals.current_editor.getScrollLeft()
+    qleft = VimGlobals.current_editor.element.getScrollLeft()
     qright= VimGlobals.current_editor.getScrollRight()
 
     @cols = Math.floor((qright-qleft)/lineSpacingHorizontal())-1
@@ -1101,7 +1101,7 @@ class VimState
     qtop = VimGlobals.current_editor.element.getScrollTop()
     qbottom = VimGlobals.current_editor.element.getScrollBottom()
 
-    qleft = VimGlobals.current_editor.getScrollLeft()
+    qleft = VimGlobals.current_editor.element.getScrollLeft()
     qright= VimGlobals.current_editor.getScrollRight()
 
     @cols = Math.floor((qright-qleft)/lineSpacingHorizontal())-1
