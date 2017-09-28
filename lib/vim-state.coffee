@@ -1077,7 +1077,7 @@ class VimState
               @location[1]),{autoscroll:false})
 
         if VimGlobals.current_editor
-          VimGlobals.current_editor.setScrollTop(lineSpacing()*\
+          VimGlobals.current_editor.element.setScrollTop(lineSpacing()*\
             VimGlobals.tlnumber)
 
       #console.log 'sbr:',sbr
