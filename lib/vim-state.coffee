@@ -200,8 +200,8 @@ register_change_handler = () ->
 
           #undo_fix = true
 
-          qtop = VimGlobals.current_editor.getScrollTop()
-          qbottom = VimGlobals.current_editor.getScrollBottom()
+          qtop = VimGlobals.current_editor.element.getScrollTop()
+          qbottom = VimGlobals.current_editor.element.getScrollBottom()
 
           tln = Math.floor((qtop)/lineSpacing()+1)
           bot = Math.floor((qbottom )/lineSpacing()+1)
@@ -317,12 +317,12 @@ ns_redraw_win_end = () ->
   focused = editor_views[uri].classList.contains('is-focused')
 
 
-  qtop = VimGlobals.current_editor.getScrollTop()
-  qbottom = VimGlobals.current_editor.getScrollBottom()
+  qtop = VimGlobals.current_editor.element.getScrollTop()
+  qbottom = VimGlobals.current_editor.element.getScrollBottom()
   qrows = Math.floor((qbottom - qtop)/lineSpacing()+1)
 
-  qleft = VimGlobals.current_editor.getScrollLeft()
-  qright= VimGlobals.current_editor.getScrollRight()
+  qleft = VimGlobals.current_editor.element.getScrollLeft()
+  qright= VimGlobals.current_editor.element.getScrollRight()
   qcols = Math.floor((qright-qleft)/lineSpacingHorizontal())-1
 
 
@@ -438,7 +438,7 @@ scrollTopChanged = () ->
       else
         up = false
         if scrolltop
-          diff = scrolltop - VimGlobals.current_editor.getScrollTop()
+          diff = scrolltop - VimGlobals.current_editor.element.getScrollTop()
           if diff > 0
             up = false
           else
@@ -463,7 +463,7 @@ scrollTopChanged = () ->
           )
 
   if VimGlobals.current_editor
-    scrolltop = VimGlobals.current_editor.getScrollTop()
+    scrolltop = VimGlobals.current_editor.element.getScrollTop()
 
 
 destroyPaneItem = (event) ->
@@ -537,7 +537,8 @@ activePaneChanged = () ->
             VimGlobals.current_editor = atom.workspace.getActiveTextEditor()
             if VimGlobals.current_editor
               scrolltopchange_subscription =
-                VimGlobals.current_editor.onDidChangeScrollTop scrollTopChanged
+                VimGlobals.current_editor.element.onDidChangeScrollTop \
+                    scrollTopChanged
 
               cursorpositionchange_subscription =
                 VimGlobals.current_editor.onDidChangeCursorPosition \
@@ -566,8 +567,8 @@ activePaneChanged = () ->
 
 class EventHandler
   constructor: (@vimState) ->
-    qtop = VimGlobals.current_editor.getScrollTop()
-    qbottom = VimGlobals.current_editor.getScrollBottom()
+    qtop = VimGlobals.current_editor.element.getScrollTop()
+    qbottom = VimGlobals.current_editor.element.getScrollBottom()
 
     @rows = Math.floor((qbottom - qtop)/lineSpacing()+1)
 
@@ -578,8 +579,8 @@ class EventHandler
 
     atom.setWindowDimensions ('width': 1400, 'height': height)
 
-    qleft = VimGlobals.current_editor.getScrollLeft()
-    qright= VimGlobals.current_editor.getScrollRight()
+    qleft = VimGlobals.current_editor.element.getScrollLeft()
+    qright= VimGlobals.current_editor.element.getScrollRight()
 
     @cols = Math.floor((qright-qleft)/lineSpacingHorizontal())-1
 
@@ -1077,7 +1078,7 @@ class VimState
               @location[1]),{autoscroll:false})
 
         if VimGlobals.current_editor
-          VimGlobals.current_editor.setScrollTop(lineSpacing()*\
+          VimGlobals.current_editor.element.setScrollTop(lineSpacing()*\
             VimGlobals.tlnumber)
 
       #console.log 'sbr:',sbr
@@ -1098,11 +1099,11 @@ class VimState
     qbottom =0
     @rows = 0
 
-    qtop = VimGlobals.current_editor.getScrollTop()
-    qbottom = VimGlobals.current_editor.getScrollBottom()
+    qtop = VimGlobals.current_editor.element.getScrollTop()
+    qbottom = VimGlobals.current_editor.element.getScrollBottom()
 
-    qleft = VimGlobals.current_editor.getScrollLeft()
-    qright= VimGlobals.current_editor.getScrollRight()
+    qleft = VimGlobals.current_editor.element.getScrollLeft()
+    qright= VimGlobals.current_editor.element.getScrollRight()
 
     @cols = Math.floor((qright-qleft)/lineSpacingHorizontal())-1
 
