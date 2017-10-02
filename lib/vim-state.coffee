@@ -2,20 +2,13 @@ _ = require 'underscore-plus'
 $ = require  'jquery'
 {Point, Range} = require 'atom'
 Marker = require 'atom'
-net = require 'net'
-os = require 'os'
 util = require 'util'
-
-Session = require 'msgpack5rpc'
 
 VimUtils = require './vim-utils'
 VimGlobals = require './vim-globals'
 VimSync = require './vim-sync'
 
-if os.platform() is 'win32'
-  CONNECT_TO = '\\\\.\\pipe\\neovim'
-else
-  CONNECT_TO = '/tmp/neovim/neovim'
+neovim = require './vim-neovim-session'
 
 DEBUG = false
 
@@ -51,58 +44,6 @@ reversed_selection = false
 element = document.createElement("item-view")
 interval_sync = undefined
 interval_timeout = undefined
-
-socket2 = new net.Socket()
-socket2.connect(CONNECT_TO)
-socket2.on('error', (error) ->
-  console.log 'error communicating (send message): ' + error
-  socket2.destroy()
-)
-tmpsession = new Session()
-tmpsession.attach(socket2, socket2)
-
-class RBuffer
-  constructor:(data) ->
-    @data = data
-
-class RWindow
-  constructor:(data) ->
-    @data = data
-
-class RTabpage
-  constructor:(data) ->
-    @data = data
-
-types = []
-tmpsession.request('vim_get_api_info', [], (err, res) ->
-  metadata = res[1]
-  constructors = [
-      RBuffer
-      RWindow
-      RTabpage
-  ]
-  i = 0
-  l = constructors.length
-  while i < l
-    ((constructor) ->
-      types.push
-        constructor: constructor
-        code: metadata.types[constructor.name[1..]].id
-        decode: (data) ->
-          new constructor(data)
-        encode: (obj) ->
-          obj.data
-      return
-    ) constructors[i]
-    i++
-
-
-  tmpsession.detach()
-  socket = new net.Socket()
-  socket.connect(CONNECT_TO)
-  VimGlobals.session = new Session(types)
-  VimGlobals.session.attach(socket, socket)
-)
 
 getMaxOccurrence = (arr) ->
   o = {}
@@ -146,7 +87,7 @@ activate_timer = () ->
         console.log 'textb:',textb
         if ((text.length==1 and mode=='command' and \
             textb.indexOf('VISUAL')==-1) )
-          neovim_send_message(['vim_input',['<Esc>']])
+          neovim.sendMessage(['vim_input',['<Esc>']])
         if (textb.indexOf('completion')==-1)
           interval_sync = setInterval(f, 100)
   )
@@ -157,23 +98,6 @@ deactivate_timer = () ->
     clearTimeout(interval_timeout)
   if interval_sync
     clearInterval(interval_sync)
-
-neovim_send_message = (message,f = undefined) ->
-  try
-    if message[0] and message[1]
-      VimGlobals.session.request(message[0], message[1], (err, res) ->
-        if f
-          if typeof(res) is 'number'
-            f(util.inspect(res))
-          else
-            f(res)
-      )
-  catch err
-    console.log 'error in neovim_send_message '+err
-    console.log 'm1:',message[0]
-    console.log 'm2:',message[1]
-
-
 
 
 #This code registers the change handler. The undo fix is a workaround
@@ -256,7 +180,7 @@ sync_lines = () ->
   if VimGlobals.current_editor
     VimGlobals.internal_change = true
     VimGlobals.updating = true
-    neovim_send_message(['vim_eval',["line('$')"]], (nLines) ->
+    neovim.sendMessage(['vim_eval',["line('$')"]], (nLines) ->
 
       if VimGlobals.current_editor.buffer.getLastRow() < parseInt(nLines)
         nl = parseInt(nLines) - VimGlobals.current_editor.buffer.getLastRow()
@@ -266,7 +190,7 @@ sync_lines = () ->
         append_options = {normalizeLineEndings: false}
         VimGlobals.current_editor.buffer.append(diff, append_options)
 
-        neovim_send_message(['vim_command',['redraw!']],
+        neovim.sendMessage(['vim_command',['redraw!']],
             (() ->
               VimGlobals.internal_change = false
               VimGlobals.updating = false
@@ -277,7 +201,7 @@ sync_lines = () ->
             VimGlobals.current_editor.buffer.getLastRow()-1]
           VimGlobals.current_editor.buffer.deleteRow(i)
 
-        neovim_send_message(['vim_command',['redraw!']],
+        neovim.sendMessage(['vim_command',['redraw!']],
             (() ->
               VimGlobals.internal_change = false
               VimGlobals.updating = false
@@ -333,7 +257,7 @@ ns_redraw_win_end = () ->
 
 
   if not VimGlobals.updating and not VimGlobals.internal_change
-    neovim_send_message(['vim_eval',["expand('%:p')"]], (filename) ->
+    neovim.sendMessage(['vim_eval',["expand('%:p')"]], (filename) ->
       if filename.indexOf('term://') == -1
         filename = filename.replace /^\s+|\s+$/g, ""
         console.log 'filename after processing:', filename
@@ -388,7 +312,7 @@ vim_mode_save_file = () ->
   #console.log 'inside neovim save file'
   #
   VimGlobals.current_editor = atom.workspace.getActiveTextEditor()
-  neovim_send_message(['vim_command',['write!']])
+  neovim.sendMessage(['vim_command',['write!']])
   setTimeout( ( ->
     VimGlobals.current_editor.buffer.reload()
     VimGlobals.internal_change = false
@@ -420,7 +344,7 @@ cursorPosChanged = (event) ->
 
 
       #console.log 'sel:',sel
-      neovim_send_message(['vim_command',['cal cursor('+r+','+c+')']],
+      neovim.sendMessage(['vim_command',['cal cursor('+r+','+c+')']],
           (() ->
             if not sel.isEmpty()
               VimGlobals.current_editor.setSelectedBufferRange(sel,\
@@ -454,7 +378,7 @@ scrollTopChanged = () ->
             r = sel.end.row + 1
             c = sel.end.column + 1
           #console.log 'sel:',sel
-          neovim_send_message(['vim_command',['cal cursor('+r+','+c+')']],
+          neovim.sendMessage(['vim_command',['cal cursor('+r+','+c+')']],
               (() ->
                 if not sel.isEmpty()
                   VimGlobals.current_editor.setSelectedBufferRange(\
@@ -471,7 +395,7 @@ destroyPaneItem = (event) ->
     console.log 'destroying pane, will send command:', event.item
     console.log 'b:', event.item.getURI()
     uri =event.item.getURI()
-    neovim_send_message(['vim_eval',["expand('%:p')"]],
+    neovim.sendMessage(['vim_eval',["expand('%:p')"]],
         ((filename) ->
 
             #filename = VimUtils.buf2str(filename)
@@ -484,14 +408,14 @@ destroyPaneItem = (event) ->
             console.log '-------------------------------',nfn
             console.log '*******************************',ncefn
 
-            neovim_send_message(['vim_command',['e! '+ncefn]],
+            neovim.sendMessage(['vim_command',['e! '+ncefn]],
                 (() ->
-                  neovim_send_message(['vim_command',['bd!']])
+                  neovim.sendMessage(['vim_command',['bd!']])
                 )
             )
 
           else
-            neovim_send_message(['vim_command',['bd!']])
+            neovim.sendMessage(['vim_command',['bd!']])
       )
 
     )
@@ -527,7 +451,7 @@ activePaneChanged = () ->
             cmd = 'e! newfile'+next_new_file_id
             next_new_file_id = next_new_file_id + 1
 
-          neovim_send_message(['vim_command',[cmd]],(x) ->
+          neovim.sendMessage(['vim_command',[cmd]],(x) ->
 
             if scrolltopchange_subscription
               scrolltopchange_subscription.dispose()
@@ -855,7 +779,7 @@ class VimState
       if q1 and not q2 and q3
         @editorView.component.setInputEnabled(false)
         q =  String.fromCharCode(e.which)
-        neovim_send_message(['vim_input',[q]])
+        neovim.sendMessage(['vim_input',[q]])
         activate_timer()
         false
       else if q1 and not q2 and not q3
@@ -866,7 +790,7 @@ class VimState
         VimGlobals.internal_change = false
         VimGlobals.updating = false
         q =  String.fromCharCode(e.which)
-        neovim_send_message(['vim_input',[q]])
+        neovim.sendMessage(['vim_input',[q]])
         activate_timer()
         true
 
@@ -879,7 +803,7 @@ class VimState
         @editorView.component.setInputEnabled(false)
         translation = @translateCode(e.which, e.shiftKey, e.ctrlKey)
         if translation != ""
-          neovim_send_message(['vim_input',[translation]])
+          neovim.sendMessage(['vim_input',[translation]])
           activate_timer()
           false
       else if q1 and not q2 and not q3
@@ -929,38 +853,38 @@ class VimState
 
   afterOpen: =>
     #console.log 'in after open'
-    neovim_send_message(['vim_command',['set scrolloff=2']])
-    neovim_send_message(['vim_command',['set nocompatible']])
-    neovim_send_message(['vim_command',['set noswapfile']])
-    neovim_send_message(['vim_command',['set nowrap']])
-    neovim_send_message(['vim_command',['set numberwidth=8']])
-    neovim_send_message(['vim_command',['set nu']])
-    neovim_send_message(['vim_command',['set autochdir']])
-    neovim_send_message(['vim_command',['set autoindent']])
-    neovim_send_message(['vim_command',['set smartindent']])
-    neovim_send_message(['vim_command',['set hlsearch']])
-    neovim_send_message(['vim_command',['set tabstop=4']])
-    neovim_send_message(['vim_command',['set encoding=utf-8']])
-    neovim_send_message(['vim_command',['set shiftwidth=4']])
-    neovim_send_message(['vim_command',['set shortmess+=I']])
-    neovim_send_message(['vim_command',['set expandtab']])
-    neovim_send_message(['vim_command',['set hidden']])
-    neovim_send_message(['vim_command',['set listchars=eol:$']])
-    neovim_send_message(['vim_command',['set list']])
-    neovim_send_message(['vim_command',['set wildmenu']])
-    neovim_send_message(['vim_command',['set showcmd']])
-    neovim_send_message(['vim_command',['set incsearch']])
-    neovim_send_message(['vim_command',['set autoread']])
-    neovim_send_message(['vim_command',['set laststatus=2']])
-    neovim_send_message(['vim_command',['set rulerformat=%L']])
-    neovim_send_message(['vim_command',['set ruler']])
-    #neovim_send_message(['vim_command',['set visualbell']])
+    neovim.sendMessage(['vim_command',['set scrolloff=2']])
+    neovim.sendMessage(['vim_command',['set nocompatible']])
+    neovim.sendMessage(['vim_command',['set noswapfile']])
+    neovim.sendMessage(['vim_command',['set nowrap']])
+    neovim.sendMessage(['vim_command',['set numberwidth=8']])
+    neovim.sendMessage(['vim_command',['set nu']])
+    neovim.sendMessage(['vim_command',['set autochdir']])
+    neovim.sendMessage(['vim_command',['set autoindent']])
+    neovim.sendMessage(['vim_command',['set smartindent']])
+    neovim.sendMessage(['vim_command',['set hlsearch']])
+    neovim.sendMessage(['vim_command',['set tabstop=4']])
+    neovim.sendMessage(['vim_command',['set encoding=utf-8']])
+    neovim.sendMessage(['vim_command',['set shiftwidth=4']])
+    neovim.sendMessage(['vim_command',['set shortmess+=I']])
+    neovim.sendMessage(['vim_command',['set expandtab']])
+    neovim.sendMessage(['vim_command',['set hidden']])
+    neovim.sendMessage(['vim_command',['set listchars=eol:$']])
+    neovim.sendMessage(['vim_command',['set list']])
+    neovim.sendMessage(['vim_command',['set wildmenu']])
+    neovim.sendMessage(['vim_command',['set showcmd']])
+    neovim.sendMessage(['vim_command',['set incsearch']])
+    neovim.sendMessage(['vim_command',['set autoread']])
+    neovim.sendMessage(['vim_command',['set laststatus=2']])
+    neovim.sendMessage(['vim_command',['set rulerformat=%L']])
+    neovim.sendMessage(['vim_command',['set ruler']])
+    #neovim.sendMessage(['vim_command',['set visualbell']])
 
 
-    neovim_send_message(['vim_command',
+    neovim.sendMessage(['vim_command',
         ['set backspace=indent,eol,start']])
 
-    neovim_send_message(['vim_input',['<Esc>']])
+    neovim.sendMessage(['vim_input',['<Esc>']])
     @activateCommandMode()
 
     if not subscriptions['redraw']
@@ -1088,7 +1012,7 @@ class VimState
 
   neovim_unsubscribe: ->
     message = ['ui_detach',[]]
-    neovim_send_message(message)
+    neovim.sendMessage(message)
     subscriptions['redraw'] = false
 
   neovim_resize:(cols, rows) =>
@@ -1113,11 +1037,11 @@ class VimState
     eventHandler.cols = @cols
     eventHandler.rows= @rows+2
     message = ['ui_try_resize',[@cols,@rows+2]]
-    neovim_send_message(message)
+    neovim.sendMessage(message)
 
     screen = ((' ' for ux in [1..@cols])  for uy in [1..@rows+2])
     @location = [0,0]
-    neovim_send_message(['vim_command',['redraw!']],
+    neovim.sendMessage(['vim_command',['redraw!']],
         (() ->
           VimGlobals.internal_change = false
         )
@@ -1132,9 +1056,10 @@ class VimState
     eventHandler = new EventHandler this
 
     message = ['ui_attach',[eventHandler.cols,eventHandler.rows,true]]
-    neovim_send_message(message)
+    neovim.sendMessage(message)
 
-    VimGlobals.session.on('notification', eventHandler.handleEvent)
+
+    neovim.addNotificationListener(eventHandler.handleEvent)
     #rows = @editor.getScreenLineCount()
     @location = [0,0]
     @status_bar = (' ' for ux in [1..eventHandler.cols])
