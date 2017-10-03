@@ -4,13 +4,14 @@ os = require 'os'
 net = require 'net'
 cp = require 'child_process'
 
-if os.platform() is 'win32'
-  CONNECT_TO = '\\\\.\\pipe\\neovim'
-else
-  CONNECT_TO = '/tmp/neovim/neovim'
+socket_address = () ->
+  if os.platform() is 'win32'
+    '\\\\.\\pipe\\neovim'
+  else
+    '/tmp/neovim/neovim'
 
 # todo: move this to options
-EMBED = true
+EMBED = false
 nvim_proc = undefined
 
 input = undefined
@@ -26,7 +27,7 @@ if EMBED
   output = nvim_proc.stdout
 else
   tmp_socket = new net.Socket()
-  tmp_socket.connect(CONNECT_TO)
+  tmp_socket.connect(socket_address())
   tmp_socket.on('error', (error) ->
     console.log 'error communicating (send message): ' + error
     tmp_socket.destroy()
@@ -80,7 +81,7 @@ tmpsession.request('vim_get_api_info', [], (err, res) ->
 
   if !EMBED
     socket = new net.Socket()
-    socket.connect(CONNECT_TO)
+    socket.connect(socket_address())
     input = socket
     output = socket
 
