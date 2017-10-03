@@ -4,6 +4,13 @@
 VimState = require './vim-state'
 
 module.exports =
+  config:
+    embed:
+      type: 'boolean'
+      default: false
+  "neovim-path":
+    type: 'string'
+    default: '/usr/local/bin/nvim'
 
   activate: ->
 

@@ -10,19 +10,17 @@ socket_address = () ->
   else
     '/tmp/neovim/neovim'
 
-# todo: move this to options
-EMBED = false
 nvim_proc = undefined
 
 input = undefined
 output = undefined
 
-if EMBED
-  # todo: the path should be part of options
+if atom.config.get('vim-mode.embed')
   nvim_proc = cp.spawn(
-    '/usr/local/bin/nvim',
+    atom.config.get('vim-mode.neovim-path'),
     ['--embed', '-u', 'NONE', '-N'],
     {})
+  console.log('Spawning nvim instance')
   input = nvim_proc.stdin
   output = nvim_proc.stdout
 else
@@ -32,6 +30,7 @@ else
     console.log 'error communicating (send message): ' + error
     tmp_socket.destroy()
   )
+  console.log('Connecting to existing nvim instance')
   input = tmp_socket
   output = tmp_socket
 
@@ -79,7 +78,7 @@ tmpsession.request('vim_get_api_info', [], (err, res) ->
 
   tmpsession.detach()
 
-  if !EMBED
+  if !atom.config.get('vim-mode.embed')
     socket = new net.Socket()
     socket.connect(socket_address())
     input = socket
