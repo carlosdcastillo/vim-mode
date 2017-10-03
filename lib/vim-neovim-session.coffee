@@ -2,20 +2,40 @@
 MsgPack = require 'msgpack5rpc'
 os = require 'os'
 net = require 'net'
+cp = require 'child_process'
 
 if os.platform() is 'win32'
   CONNECT_TO = '\\\\.\\pipe\\neovim'
 else
   CONNECT_TO = '/tmp/neovim/neovim'
 
-socket2 = new net.Socket()
-socket2.connect(CONNECT_TO)
-socket2.on('error', (error) ->
-  console.log 'error communicating (send message): ' + error
-  socket2.destroy()
-)
+# todo: move this to options
+EMBED = true
+nvim_proc = undefined
+
+input = undefined
+output = undefined
+
+if EMBED
+  # todo: the path should be part of options
+  nvim_proc = cp.spawn(
+    '/usr/local/bin/nvim',
+    ['--embed', '-u', 'NONE', '-N'],
+    {})
+  input = nvim_proc.stdin
+  output = nvim_proc.stdout
+else
+  tmp_socket = new net.Socket()
+  tmp_socket.connect(CONNECT_TO)
+  tmp_socket.on('error', (error) ->
+    console.log 'error communicating (send message): ' + error
+    tmp_socket.destroy()
+  )
+  input = tmp_socket
+  output = tmp_socket
+
 tmpsession = new MsgPack()
-tmpsession.attach(socket2, socket2)
+tmpsession.attach(input, output)
 
 class RBuffer
   constructor:(data) ->
@@ -56,13 +76,16 @@ tmpsession.request('vim_get_api_info', [], (err, res) ->
     ) constructors[i]
     i++
 
-
   tmpsession.detach()
-  socket = new net.Socket()
-  socket.connect(CONNECT_TO)
+
+  if !EMBED
+    socket = new net.Socket()
+    socket.connect(CONNECT_TO)
+    input = socket
+    output = socket
 
   session = new MsgPack(types)
-  session.attach(socket, socket)
+  session.attach(input, output)
 )
 
 module.exports = {
