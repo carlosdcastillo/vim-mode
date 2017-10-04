@@ -3,10 +3,6 @@ root = exports ? this
 unless root.lupdates
   root.lupdates = []
 
-unless root.session
-  root.session = undefined
-
-
 unless root.current_editor
   root.current_editor = undefined
 
