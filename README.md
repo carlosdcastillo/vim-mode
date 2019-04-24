@@ -1,8 +1,14 @@
+
+# I'm not working on this anymore. It was all experimental.
+
+This project/idea needs a new home.
+
 # What is this?
 
 This is a work in progress [Atom](http://atom.io/) package that implements
 complete vim bindings by connecting to
 [Neovim](http://github.com/neovim/neovim).
+
 
 # What's new?
 
